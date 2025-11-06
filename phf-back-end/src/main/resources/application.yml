@@ -1,0 +1,23 @@
+spring:
+  application:
+    name:
+      phf-back-end
+  datasource:
+    url: jdbc:postgresql://yekpjpfhkjaydufdzxgo.supabase.co:5432/postgres?sslmode=require
+    username: pharmapp
+    password: 123
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 15000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: pharmapp
+        jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    schemas: pharmapp
+    defaultSchema: pharmapp
