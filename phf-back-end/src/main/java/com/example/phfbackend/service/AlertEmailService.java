@@ -4,9 +4,9 @@ import com.example.phfbackend.enities.Alert;
 
 public interface AlertEmailService {
 
-    Alert createAlert();
+    String createAlertMail();
     default void sendAlert(){
-        Alert alert = createAlert();
+        String Mail = createAlertMail();
         //Code goi SendGrid
     };
 

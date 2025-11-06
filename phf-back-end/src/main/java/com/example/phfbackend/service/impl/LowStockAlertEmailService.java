@@ -6,7 +6,7 @@ import com.example.phfbackend.service.AlertEmailService;
 
 public class LowStockAlertEmailService implements AlertEmailService {
     @Override
-    public Alert createAlert() {
-        return new LowStockAlert();
+    public String createAlertMail() {
+        return "Tra ve noi dung mail duoc tao tu lowStock";
     }
 }
