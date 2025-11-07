@@ -62,6 +62,12 @@ public class InventoryBatch extends AuditableEntity {
     @Column(name = "expiry_date", nullable = false)
     private LocalDate expiryDate;
 
+    @Column(name = "selling_price", nullable = false, precision = 10, scale = 2)
+    private BigDecimal sellingPrice;
+
+    @Column(nullable = false)
+    private boolean active;
+
     @Builder(builderMethodName = "newBuilder")
     private InventoryBatch(UUID id,
                            Product product,
@@ -69,7 +75,9 @@ public class InventoryBatch extends AuditableEntity {
                            Integer quantityOnHand,
                            BigDecimal costPrice,
                            LocalDate receivedDate,
-                           LocalDate expiryDate) {
+                           LocalDate expiryDate,
+                           BigDecimal sellingPrice,
+                           Boolean active) {
         this.id = id;
         this.product = Validation.requireNonNull(product, "product");
         this.batchNumber = Validation.requireNonBlank(batchNumber, "batchNumber");
@@ -77,6 +85,8 @@ public class InventoryBatch extends AuditableEntity {
         this.costPrice = Validation.requirePositive(costPrice, "costPrice");
         this.receivedDate = Validation.requireNonNull(receivedDate, "receivedDate");
         this.expiryDate = Validation.requireNonNull(expiryDate, "expiryDate");
+        this.sellingPrice = Validation.requirePositive(sellingPrice, "sellingPrice");
+        this.active = active != null ? active : true;
         if (this.expiryDate.isBefore(this.receivedDate)) {
             throw new IllegalArgumentException("expiryDate must be on or after receivedDate");
         }
@@ -102,5 +112,17 @@ public class InventoryBatch extends AuditableEntity {
         Validation.requirePositive(warningDays, "warningDays");
         LocalDate threshold = asOf.plusDays(warningDays);
         return !isExpired(asOf) && (expiryDate.isBefore(threshold) || expiryDate.isEqual(threshold));
+    }
+
+    public void updateSellingPrice(BigDecimal sellingPrice) {
+        this.sellingPrice = Validation.requirePositive(sellingPrice, "sellingPrice");
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public void activate() {
+        this.active = true;
     }
 }
