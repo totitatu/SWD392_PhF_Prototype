@@ -122,18 +122,6 @@ export function LoginPage({ onSignupClick }) {
               Sign up
             </button>
           </div>
-
-          <div className="text-xs text-muted-foreground text-center bg-secondary/50 p-3 rounded-md">
-            Note: To enable Google login, please complete setup at{' '}
-            <a
-              href="https://supabase.com/docs/guides/auth/social-login/auth-google"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              Supabase Google Login Docs
-            </a>
-          </div>
         </CardContent>
       </Card>
     </div>

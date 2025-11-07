@@ -60,14 +60,24 @@ public class Supplier extends AuditableEntity {
     )
     private Set<Product> products = new HashSet<>();
 
+    @Column(length = 1000)
+    private String notes;
+
+    @Column(nullable = false)
+    private boolean active;
+
     @Builder(builderMethodName = "newBuilder")
     private Supplier(UUID id,
                      String name,
                      ContactInfo contact,
-                     @Singular Set<Product> products) {
+                     @Singular Set<Product> products,
+                     String notes,
+                     Boolean active) {
         this.id = id;
         updateName(name);
         updateContact(contact);
+        this.notes = notes;
+        this.active = active != null ? active : true;
         if (products != null) {
             this.products.addAll(products);
         }
@@ -91,5 +101,17 @@ public class Supplier extends AuditableEntity {
 
     public void unregisterProduct(Product product) {
         products.remove(Validation.requireNonNull(product, "product"));
+    }
+
+    public void updateNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public void activate() {
+        this.active = true;
     }
 }

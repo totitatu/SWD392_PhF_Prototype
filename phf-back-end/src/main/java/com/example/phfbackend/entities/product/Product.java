@@ -63,6 +63,15 @@ public class Product extends AuditableEntity {
     @Column(name = "expiry_alert_days")
     private Integer expiryAlertDays;
 
+    @Column(length = 128)
+    private String dosage;
+
+    @Column(name = "min_stock")
+    private Integer minStock;
+
+    @Column(nullable = false)
+    private boolean active;
+
     @Builder(builderMethodName = "newBuilder")
     private Product(UUID id,
                     String sku,
@@ -72,10 +81,16 @@ public class Product extends AuditableEntity {
                     String dosageStrength,
                     ProductCategory category,
                     Integer reorderLevel,
-                    Integer expiryAlertDays) {
+                    Integer expiryAlertDays,
+                    String dosage,
+                    Integer minStock,
+                    Boolean active) {
         this.id = id;
         updateDetails(sku, name, activeIngredient, dosageForm, dosageStrength, category);
         configureAlerts(reorderLevel, expiryAlertDays);
+        this.dosage = dosage;
+        this.minStock = minStock;
+        this.active = active != null ? active : true;
     }
 
     public void updateDetails(String sku,
@@ -95,5 +110,21 @@ public class Product extends AuditableEntity {
     public void configureAlerts(Integer reorderLevel, Integer expiryAlertDays) {
         this.reorderLevel = reorderLevel != null ? Validation.requirePositiveOrZero(reorderLevel, "reorderLevel") : null;
         this.expiryAlertDays = expiryAlertDays != null ? Validation.requirePositiveOrZero(expiryAlertDays, "expiryAlertDays") : null;
+    }
+
+    public void updateDosage(String dosage) {
+        this.dosage = dosage;
+    }
+
+    public void updateMinStock(Integer minStock) {
+        this.minStock = minStock != null ? Validation.requirePositiveOrZero(minStock, "minStock") : null;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public void activate() {
+        this.active = true;
     }
 }

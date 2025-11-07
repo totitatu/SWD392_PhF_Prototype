@@ -1,0 +1,35 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+compose.yaml
+
+# Documentation
+*.md
+HELP.md
+
+# Logs
+*.log
+
+# Test files
+src/test/
+
