@@ -477,7 +477,8 @@ npm run lint
 
 ## 👥 Contributors
 
-daoohoangg
+
+totitatu, daoohoangg
 
 ## 📞 Support
 
