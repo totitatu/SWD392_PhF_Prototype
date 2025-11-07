@@ -19,7 +19,18 @@ async function apiCall(endpoint, options = {}) {
       throw new Error(error.message || `HTTP error! status: ${response.status}`);
     }
     
-    return await response.json();
+    // Handle 204 No Content response (no body)
+    if (response.status === 204) {
+      return null; // Return null for 204 No Content responses
+    }
+    
+    // Try to parse JSON, but handle empty responses gracefully
+    const text = await response.text();
+    if (!text || text.trim().length === 0) {
+      return null;
+    }
+    
+    return JSON.parse(text);
   } catch (error) {
     console.error(`API call failed: ${endpoint}`, error);
     throw error;
@@ -39,9 +50,11 @@ export const userAPI = {
   },
   search: (term) => apiCall(`/users/search?term=${encodeURIComponent(term)}`),
   getById: (id) => apiCall(`/users/${id}`),
+  getByEmail: (email) => apiCall(`/users/by-email/${encodeURIComponent(email)}`),
   create: (data) => apiCall('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => apiCall(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deactivate: (id) => apiCall(`/users/${id}/deactivate`, { method: 'PUT' }),
+  deactivate: (id) => apiCall(`/users/${id}/deactivate`, { method: 'DELETE' }),
+  activate: (id) => apiCall(`/users/${id}/activate`, { method: 'PUT' }),
 };
 
 // Supplier Management APIs (UC12-UC18)
@@ -59,7 +72,8 @@ export const supplierAPI = {
   getById: (id) => apiCall(`/suppliers/${id}`),
   create: (data) => apiCall('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => apiCall(`/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deactivate: (id) => apiCall(`/suppliers/${id}/deactivate`, { method: 'PUT' }),
+  deactivate: (id) => apiCall(`/suppliers/${id}/deactivate`, { method: 'DELETE' }),
+  activate: (id) => apiCall(`/suppliers/${id}/activate`, { method: 'PUT' }),
 };
 
 // Product Management APIs (UC19-UC26)
@@ -82,7 +96,8 @@ export const productAPI = {
       method: 'POST', 
       body: JSON.stringify({ userInput }) 
     }),
-  deactivate: (id) => apiCall(`/products/${id}/deactivate`, { method: 'PUT' }),
+  deactivate: (id) => apiCall(`/products/${id}/deactivate`, { method: 'DELETE' }),
+  activate: (id) => apiCall(`/products/${id}/activate`, { method: 'PUT' }),
 };
 
 // Purchase Order APIs (UC27-UC34)
@@ -105,7 +120,8 @@ export const purchaseOrderAPI = {
     }),
   update: (id, data) => apiCall(`/purchase-orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => apiCall(`/purchase-orders/${id}`, { method: 'DELETE' }),
-  send: (id) => apiCall(`/purchase-orders/${id}/send`, { method: 'PUT' }),
+  send: (id) => apiCall(`/purchase-orders/${id}/send`, { method: 'POST' }),
+  updateStatus: (id, status) => apiCall(`/purchase-orders/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PUT' }),
 };
 
 // Inventory Management APIs (UC35-UC42)
@@ -131,6 +147,7 @@ export const inventoryAPI = {
 export const posAPI = {
   searchProducts: (term) => apiCall(`/pos/products/search?term=${encodeURIComponent(term)}`),
   getProductByBarcode: (barcode) => apiCall(`/pos/products/barcode/${encodeURIComponent(barcode)}`),
+  getSuggestedProducts: () => apiCall('/pos/products/suggested'),
 };
 
 // Sale Transaction APIs (UC46-UC48)
@@ -173,5 +190,6 @@ export const geminiAPI = {
   chatProduct: (productId, userInput) => 
     apiCall(`/gemini/chat/product/${productId}`, { method: 'POST', body: JSON.stringify({ userInput }) }),
 };
+
 
 

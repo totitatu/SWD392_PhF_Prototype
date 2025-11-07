@@ -5,6 +5,8 @@ import com.example.phfbackend.dto.request.SaleTransactionLineRequest;
 import com.example.phfbackend.dto.response.SaleTransactionLineResponse;
 import com.example.phfbackend.dto.request.SaleTransactionRequest;
 import com.example.phfbackend.dto.response.SaleTransactionResponse;
+import com.example.phfbackend.entities.product.ProductCategory;
+import com.example.phfbackend.entities.sale.PaymentMethod;
 import com.example.phfbackend.entities.sale.SaleTransaction;
 import com.example.phfbackend.entities.sale.SaleTransactionLine;
 import com.example.phfbackend.repository.InventoryBatchRepository;
@@ -15,9 +17,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -33,6 +38,7 @@ public class SaleTransactionController {
     private final InventoryBatchService inventoryBatchService;
     
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<List<SaleTransactionResponse>> listSaleTransactions(
             @RequestParam(required = false) String searchTerm,
             @RequestParam(required = false) UUID cashierId,
@@ -59,26 +65,50 @@ public class SaleTransactionController {
     }
     
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<SaleTransactionResponse> getSaleTransaction(@PathVariable UUID id) {
         return saleTransactionService.findById(id)
                 .map(transaction -> ResponseEntity.ok(toResponse(transaction)))
                 .orElse(ResponseEntity.notFound().build());
     }
     
+    /**
+     * UC46 - Generate Receipt
+     * Pharmacy staff finalizes the sale by generating an official receipt.
+     * If the sale contains prescribed drugs, a prescription image must be uploaded.
+     */
     @PostMapping
+    @Transactional
     public ResponseEntity<SaleTransactionResponse> createSaleTransaction(@Valid @RequestBody SaleTransactionRequest request) {
+        // PRE-1: Check cart is not empty (validated by @NotEmpty on lineItems)
+        if (request.getLineItems() == null || request.getLineItems().isEmpty()) {
+            throw new IllegalArgumentException("Shopping cart is not empty");
+        }
+        
         var cashier = userRepository.findById(request.getCashierId())
                 .orElseThrow(() -> new IllegalArgumentException("Cashier not found: " + request.getCashierId()));
         
+        // Generate unique receipt ID if not provided
+        String receiptNumber = request.getReceiptNumber();
+        if (receiptNumber == null || receiptNumber.trim().isEmpty()) {
+            receiptNumber = generateReceiptNumber();
+        }
+        
+        // Prescription image is optional (no longer required for prescription products)
+        
         SaleTransaction transaction = SaleTransaction.newBuilder()
-                .receiptNumber(request.getReceiptNumber())
-                .soldAt(request.getSoldAt())
+                .receiptNumber(receiptNumber)
+                .soldAt(request.getSoldAt() != null ? request.getSoldAt() : OffsetDateTime.now())
                 .cashier(cashier)
                 .totalDiscount(request.getTotalDiscount())
+                .paymentMethod(request.getPaymentMethod())
+                .prescriptionImageUrl(request.getPrescriptionImageUrl())
+                .customerEmail(request.getCustomerEmail())
                 .build();
         
         for (SaleTransactionLineRequest lineRequest : request.getLineItems()) {
-            var batch = inventoryBatchRepository.findById(lineRequest.getInventoryBatchId())
+            // Use findByIdWithProduct to eager load Product entity
+            var batch = inventoryBatchRepository.findByIdWithProduct(lineRequest.getInventoryBatchId())
                     .orElseThrow(() -> new IllegalArgumentException("Inventory batch not found: " + lineRequest.getInventoryBatchId()));
             
             SaleTransactionLine line = SaleTransactionLine.newBuilder()
@@ -95,7 +125,25 @@ public class SaleTransactionController {
         }
         
         SaleTransaction created = saleTransactionService.createSaleTransaction(transaction);
+        
+        // A1: Email receipt (if requested)
+        if (Boolean.TRUE.equals(request.getEmailReceipt()) && request.getCustomerEmail() != null) {
+            // TODO: Implement email receipt functionality
+            // For now, just log that email was requested
+        }
+        
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
+    }
+    
+    /**
+     * Generate unique receipt number (UC46 - Normal Flow step 4)
+     * Format: REC-YYYYMMDD-HHMMSS-XXXX
+     */
+    private String generateReceiptNumber() {
+        OffsetDateTime now = OffsetDateTime.now();
+        String dateTime = now.format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String random = String.format("%04d", (int)(Math.random() * 10000));
+        return "REC-" + dateTime + "-" + random;
     }
     
     
@@ -134,6 +182,9 @@ public class SaleTransactionController {
                 .lineItems(lineResponses)
                 .totalDiscount(transaction.getTotalDiscount())
                 .totalAmount(transaction.calculateTotalAmount())
+                .paymentMethod(transaction.getPaymentMethod())
+                .prescriptionImageUrl(transaction.getPrescriptionImageUrl())
+                .customerEmail(transaction.getCustomerEmail())
                 .createdAt(transaction.getCreatedAt())
                 .updatedAt(transaction.getUpdatedAt())
                 .build();

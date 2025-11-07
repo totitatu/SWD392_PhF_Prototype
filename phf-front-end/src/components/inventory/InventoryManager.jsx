@@ -14,7 +14,7 @@ import {
 } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Plus, Search, Package, AlertTriangle, Calendar, Edit, Eye, X, Filter } from 'lucide-react';
+import { Plus, Search, Package, AlertTriangle, Calendar, Edit, Eye, X, Filter, Users } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -31,6 +31,7 @@ export function InventoryManager({ session }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [stockFilter, setStockFilter] = useState('all'); // all, in-stock, low-stock, out-of-stock
+  const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showAddStock, setShowAddStock] = useState(false);
   const [showEditProduct, setShowEditProduct] = useState(false);
@@ -49,18 +50,22 @@ export function InventoryManager({ session }) {
     name: '',
     activeIngredient: '',
     dosage: '',
+    dosageForm: '',
+    dosageStrength: '',
     sku: '',
     category: '',
     minStock: 10,
+    active: true,
   });
 
   // New stock form
   const [newStock, setNewStock] = useState({
     productId: '',
     batchNumber: '',
-    quantity: 0,
+    quantityOnHand: 0,
     costPrice: 0,
     sellingPrice: 0,
+    receivedDate: new Date().toISOString().split('T')[0], // Default to today
     expiryDate: '',
   });
 
@@ -70,8 +75,9 @@ export function InventoryManager({ session }) {
 
   const fetchData = async () => {
     try {
+      // Fetch all products (both active and inactive)
       const [productsData, inventoryData] = await Promise.all([
-        productAPI.list({ active: true }),
+        productAPI.list(), // Remove active filter to get all products
         inventoryAPI.list({ active: true }),
       ]);
 
@@ -89,11 +95,12 @@ export function InventoryManager({ session }) {
       await productAPI.create({
         name: newProduct.name,
         activeIngredient: newProduct.activeIngredient,
-        dosageForm: newProduct.dosage || 'TABLET',
-        dosageStrength: newProduct.dosage,
+        dosageForm: newProduct.dosageForm || 'TABLET',
+        dosageStrength: newProduct.dosageStrength || newProduct.dosage || '',
         sku: newProduct.sku,
         category: newProduct.category || 'OTHER',
-        minStock: newProduct.minStock,
+        dosage: newProduct.dosage || null,
+        minStock: newProduct.minStock || null,
         active: true,
       });
       await fetchData();
@@ -102,9 +109,12 @@ export function InventoryManager({ session }) {
         name: '',
         activeIngredient: '',
         dosage: '',
+        dosageForm: '',
+        dosageStrength: '',
         sku: '',
         category: '',
         minStock: 10,
+        active: true,
       });
     } catch (error) {
       console.error('Error adding product:', error);
@@ -117,10 +127,11 @@ export function InventoryManager({ session }) {
       await inventoryAPI.create({
         productId: newStock.productId,
         batchNumber: newStock.batchNumber,
-        quantity: newStock.quantity,
+        quantityOnHand: newStock.quantityOnHand,
         costPrice: newStock.costPrice,
         sellingPrice: newStock.sellingPrice,
-        expiryDate: newStock.expiryDate || null,
+        receivedDate: newStock.receivedDate || new Date().toISOString().split('T')[0],
+        expiryDate: newStock.expiryDate,
         active: true,
       });
       await fetchData();
@@ -128,9 +139,10 @@ export function InventoryManager({ session }) {
       setNewStock({
         productId: '',
         batchNumber: '',
-        quantity: 0,
+        quantityOnHand: 0,
         costPrice: 0,
         sellingPrice: 0,
+        receivedDate: new Date().toISOString().split('T')[0],
         expiryDate: '',
       });
     } catch (error) {
@@ -142,7 +154,7 @@ export function InventoryManager({ session }) {
   const getProductStock = (productId) => {
     return inventory
       .filter((item) => item.productId === productId)
-      .reduce((sum, item) => sum + (item.quantity || 0), 0);
+      .reduce((sum, item) => sum + (item.quantityOnHand || 0), 0);
   };
 
   const isLowStock = (productId) => {
@@ -162,6 +174,14 @@ export function InventoryManager({ session }) {
     // Category filter
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
 
+    // Status filter
+    let matchesStatus = true;
+    if (statusFilter === 'active') {
+      matchesStatus = product.active !== false;
+    } else if (statusFilter === 'inactive') {
+      matchesStatus = product.active === false;
+    }
+
     // Stock filter
     const stock = getProductStock(product.id);
     const lowStock = isLowStock(product.id);
@@ -174,7 +194,7 @@ export function InventoryManager({ session }) {
       matchesStock = stock === 0;
     }
 
-    return matchesSearch && matchesCategory && matchesStock;
+    return matchesSearch && matchesCategory && matchesStatus && matchesStock;
   });
 
   const handleViewProduct = (product) => {
@@ -188,9 +208,12 @@ export function InventoryManager({ session }) {
       name: product.name || '',
       activeIngredient: product.activeIngredient || '',
       dosage: product.dosage || '',
+      dosageForm: product.dosageForm || '',
+      dosageStrength: product.dosageStrength || '',
       sku: product.sku || '',
       category: product.category || '',
       minStock: product.minStock || 10,
+      active: product.active !== false,
     });
     setShowEditProduct(true);
   };
@@ -200,11 +223,13 @@ export function InventoryManager({ session }) {
       await productAPI.update(editingProduct.id, {
         name: newProduct.name,
         activeIngredient: newProduct.activeIngredient,
-        dosageForm: newProduct.dosage || 'TABLET',
-        dosageStrength: newProduct.dosage,
+        dosageForm: newProduct.dosageForm || 'TABLET',
+        dosageStrength: newProduct.dosageStrength || newProduct.dosage || '',
         sku: newProduct.sku,
         category: newProduct.category || 'OTHER',
-        minStock: newProduct.minStock,
+        dosage: newProduct.dosage || null,
+        minStock: newProduct.minStock || null,
+        active: editingProduct ? newProduct.active : true,
       });
       await fetchData();
       setShowEditProduct(false);
@@ -213,9 +238,12 @@ export function InventoryManager({ session }) {
         name: '',
         activeIngredient: '',
         dosage: '',
+        dosageForm: '',
+        dosageStrength: '',
         sku: '',
         category: '',
         minStock: 10,
+        active: true,
       });
     } catch (error) {
       console.error('Error updating product:', error);
@@ -235,6 +263,18 @@ export function InventoryManager({ session }) {
     }
   };
 
+  const handleActivateProduct = async (product) => {
+    if (!confirm(`Are you sure you want to activate ${product.name}?`)) return;
+
+    try {
+      await productAPI.activate(product.id);
+      await fetchData();
+    } catch (error) {
+      console.error('Error activating product:', error);
+      alert('Error activating product: ' + (error.message || 'Unknown error'));
+    }
+  };
+
   // Inventory management functions
   const filteredInventory = inventory.filter((item) => {
     const product = products.find(p => p.id === item.productId);
@@ -248,7 +288,7 @@ export function InventoryManager({ session }) {
     // Status filter
     let matchesFilter = true;
     if (inventoryFilter === 'low-stock') {
-      matchesFilter = item.quantity <= (product?.minStock || 10);
+      matchesFilter = item.quantityOnHand <= (product?.minStock || 10);
     } else if (inventoryFilter === 'expiring-soon') {
       const expiryDate = new Date(item.expiryDate);
       const daysUntilExpiry = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
@@ -271,9 +311,10 @@ export function InventoryManager({ session }) {
     setNewStock({
       productId: item.productId,
       batchNumber: item.batchNumber || '',
-      quantity: item.quantity || 0,
+      quantityOnHand: item.quantityOnHand || 0,
       costPrice: item.costPrice || 0,
       sellingPrice: item.sellingPrice || 0,
+      receivedDate: item.receivedDate || new Date().toISOString().split('T')[0],
       expiryDate: item.expiryDate || '',
     });
     setShowEditInventory(true);
@@ -284,9 +325,10 @@ export function InventoryManager({ session }) {
       await inventoryAPI.update(editingInventory.id, {
         productId: newStock.productId,
         batchNumber: newStock.batchNumber,
-        quantity: newStock.quantity,
+        quantityOnHand: newStock.quantityOnHand,
         costPrice: newStock.costPrice,
         sellingPrice: newStock.sellingPrice,
+        receivedDate: newStock.receivedDate,
         expiryDate: newStock.expiryDate || null,
       });
       await fetchData();
@@ -295,9 +337,10 @@ export function InventoryManager({ session }) {
       setNewStock({
         productId: '',
         batchNumber: '',
-        quantity: 0,
+        quantityOnHand: 0,
         costPrice: 0,
         sellingPrice: 0,
+        receivedDate: new Date().toISOString().split('T')[0],
         expiryDate: '',
       });
     } catch (error) {
@@ -308,7 +351,7 @@ export function InventoryManager({ session }) {
 
   const handleDeactivateInventory = async (item) => {
     const product = products.find(p => p.id === item.productId);
-    if (!confirm(`Are you sure you want to deactivate this inventory item for ${product?.name || 'product'}?`)) return;
+    if (!confirm(`Are you sure you want to deactivate this inventory stock for ${product?.name || 'product'}?`)) return;
 
     try {
       await inventoryAPI.deactivate(item.id);
@@ -386,11 +429,19 @@ export function InventoryManager({ session }) {
                 </div>
                 <div className="space-y-2">
                   <Label>Category</Label>
-                  <Input
-                    value={newProduct.category}
-                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                    placeholder="Pain Relief"
-                  />
+                  <Select
+                    value={newProduct.category || ''}
+                    onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PRESCRIPTION">Prescription</SelectItem>
+                      <SelectItem value="OVER_THE_COUNTER">Over the Counter</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Minimum Stock Level</Label>
@@ -434,7 +485,10 @@ export function InventoryManager({ session }) {
                     <SelectContent>
                       {products.map((product) => (
                         <SelectItem key={product.id} value={product.id}>
-                          {product.name} - {product.dosage}
+                          {product.name} - {product.dosage || 
+                            (product.dosageStrength && product.dosageForm 
+                              ? `${product.dosageStrength} ${product.dosageForm}` 
+                              : product.dosageStrength || product.dosageForm || '')}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -452,8 +506,9 @@ export function InventoryManager({ session }) {
                   <Label>Quantity</Label>
                   <Input
                     type="number"
-                    value={newStock.quantity}
-                    onChange={(e) => setNewStock({ ...newStock, quantity: parseInt(e.target.value) })}
+                    min="1"
+                    value={newStock.quantityOnHand}
+                    onChange={(e) => setNewStock({ ...newStock, quantityOnHand: parseInt(e.target.value) || 0 })}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -462,8 +517,9 @@ export function InventoryManager({ session }) {
                     <Input
                       type="number"
                       step="0.01"
+                      min="0.01"
                       value={newStock.costPrice}
-                      onChange={(e) => setNewStock({ ...newStock, costPrice: parseFloat(e.target.value) })}
+                      onChange={(e) => setNewStock({ ...newStock, costPrice: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                   <div className="space-y-2">
@@ -471,18 +527,29 @@ export function InventoryManager({ session }) {
                     <Input
                       type="number"
                       step="0.01"
+                      min="0.01"
                       value={newStock.sellingPrice}
-                      onChange={(e) => setNewStock({ ...newStock, sellingPrice: parseFloat(e.target.value) })}
+                      onChange={(e) => setNewStock({ ...newStock, sellingPrice: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Expiry Date</Label>
-                  <Input
-                    type="date"
-                    value={newStock.expiryDate}
-                    onChange={(e) => setNewStock({ ...newStock, expiryDate: e.target.value })}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Received Date</Label>
+                    <Input
+                      type="date"
+                      value={newStock.receivedDate}
+                      onChange={(e) => setNewStock({ ...newStock, receivedDate: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Expiry Date</Label>
+                    <Input
+                      type="date"
+                      value={newStock.expiryDate}
+                      onChange={(e) => setNewStock({ ...newStock, expiryDate: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <Button onClick={handleAddStock} className="w-full">
                   Add Stock
@@ -534,11 +601,19 @@ export function InventoryManager({ session }) {
                 </div>
                 <div className="space-y-2">
                   <Label>Category</Label>
-                  <Input
-                    value={newProduct.category}
-                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                    placeholder="Pain Relief"
-                  />
+                  <Select
+                    value={newProduct.category || ''}
+                    onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PRESCRIPTION">Prescription</SelectItem>
+                      <SelectItem value="OVER_THE_COUNTER">Over the Counter</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Minimum Stock Level</Label>
@@ -547,6 +622,26 @@ export function InventoryManager({ session }) {
                     value={newProduct.minStock}
                     onChange={(e) => setNewProduct({ ...newProduct, minStock: parseInt(e.target.value) })}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Account Status</Label>
+                  <Select 
+                    value={newProduct.active ? 'active' : 'inactive'} 
+                    onValueChange={(value) => setNewProduct({ ...newProduct, active: value === 'active' })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive (Deactivated)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {newProduct.active 
+                      ? 'Product is active and can be used in inventory and sales' 
+                      : 'Product is deactivated and cannot be used'}
+                  </p>
                 </div>
                 <Button onClick={handleUpdateProduct} className="w-full">
                   Update Product
@@ -577,8 +672,25 @@ export function InventoryManager({ session }) {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Dosage</p>
-                      <p className="font-medium">{selectedProduct.dosage}</p>
+                      <p className="font-medium">
+                        {selectedProduct.dosage || 
+                         (selectedProduct.dosageStrength && selectedProduct.dosageForm 
+                          ? `${selectedProduct.dosageStrength} ${selectedProduct.dosageForm}` 
+                          : selectedProduct.dosageStrength || selectedProduct.dosageForm || 'N/A')}
+                      </p>
                     </div>
+                    {(selectedProduct.dosageForm || selectedProduct.dosageStrength) && (
+                      <>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Dosage Form</p>
+                          <p className="font-medium">{selectedProduct.dosageForm || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Dosage Strength</p>
+                          <p className="font-medium">{selectedProduct.dosageStrength || 'N/A'}</p>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <p className="text-sm text-muted-foreground">Category</p>
                       <p className="font-medium">{selectedProduct.category}</p>
@@ -629,6 +741,15 @@ export function InventoryManager({ session }) {
                 ))}
               </select>
               <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+              <select
                 value={stockFilter}
                 onChange={(e) => setStockFilter(e.target.value)}
                 className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm"
@@ -649,7 +770,8 @@ export function InventoryManager({ session }) {
                 <TableHead>SKU</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Stock Status</TableHead>
+                <TableHead>Account Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -664,7 +786,10 @@ export function InventoryManager({ session }) {
                       <div>
                         <div>{product.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {product.activeIngredient} - {product.dosage}
+                          {product.activeIngredient} - {product.dosage || 
+                            (product.dosageStrength && product.dosageForm 
+                              ? `${product.dosageStrength} ${product.dosageForm}` 
+                              : product.dosageStrength || product.dosageForm || 'N/A')}
                         </div>
                       </div>
                     </TableCell>
@@ -682,6 +807,11 @@ export function InventoryManager({ session }) {
                       )}
                     </TableCell>
                     <TableCell>
+                      <Badge variant={product.active === false ? 'destructive' : 'outline'}>
+                        {product.active === false ? 'Inactive' : 'Active'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -697,14 +827,25 @@ export function InventoryManager({ session }) {
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        {product.isActive !== false && (
+                        {product.active !== false ? (
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => handleDeactivateProduct(product)}
                             className="text-destructive"
+                            title="Deactivate product"
                           >
                             <X className="w-4 h-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleActivateProduct(product)}
+                            className="text-green-600 hover:text-green-700"
+                            title="Activate product"
+                          >
+                            <Users className="w-4 h-4" />
                           </Button>
                         )}
                       </div>
@@ -722,9 +863,9 @@ export function InventoryManager({ session }) {
         </CardContent>
       </Card>
 
-      {/* Inventory Items Section */}
+      {/* Inventory Stocks Section */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Inventory Items</h2>
+        <h2 className="text-xl font-semibold mb-4">Inventory Stocks</h2>
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-4">
@@ -781,7 +922,7 @@ export function InventoryManager({ session }) {
                       <TableCell className="font-mono text-xs">
                         {item.batchNumber || 'N/A'}
                       </TableCell>
-                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>{item.quantityOnHand}</TableCell>
                       <TableCell>${item.costPrice?.toFixed(2) || '0.00'}</TableCell>
                       <TableCell>${item.sellingPrice?.toFixed(2) || '0.00'}</TableCell>
                       <TableCell>
@@ -844,8 +985,8 @@ export function InventoryManager({ session }) {
             {filteredInventory.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
                 {inventory.length === 0
-                  ? 'No inventory items yet'
-                  : 'No inventory items match your filters'}
+                  ? 'No inventory stocks yet'
+                  : 'No inventory stocks match your filters'}
               </div>
             )}
           </CardContent>
@@ -856,7 +997,7 @@ export function InventoryManager({ session }) {
       <Dialog open={showViewInventory} onOpenChange={setShowViewInventory}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Inventory Item Details</DialogTitle>
+            <DialogTitle>Inventory Stock Details</DialogTitle>
           </DialogHeader>
           {selectedInventory && (
             <div className="space-y-4">
@@ -873,7 +1014,7 @@ export function InventoryManager({ session }) {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Quantity</p>
-                  <p className="font-medium">{selectedInventory.quantity}</p>
+                  <p className="font-medium">{selectedInventory.quantityOnHand}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Cost Price</p>
@@ -907,9 +1048,9 @@ export function InventoryManager({ session }) {
       <Dialog open={showEditInventory} onOpenChange={setShowEditInventory}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Inventory Item</DialogTitle>
+            <DialogTitle>Edit Inventory Stock</DialogTitle>
             <DialogDescription>
-              Update inventory item information
+              Update inventory stock information
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -943,13 +1084,22 @@ export function InventoryManager({ session }) {
                 placeholder="BATCH-001"
               />
             </div>
+            <div className="space-y-2">
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min="1"
+                value={newStock.quantityOnHand}
+                onChange={(e) => setNewStock({ ...newStock, quantityOnHand: parseInt(e.target.value) || 0 })}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Quantity</Label>
+                <Label>Received Date</Label>
                 <Input
-                  type="number"
-                  value={newStock.quantity}
-                  onChange={(e) => setNewStock({ ...newStock, quantity: parseInt(e.target.value) || 0 })}
+                  type="date"
+                  value={newStock.receivedDate}
+                  onChange={(e) => setNewStock({ ...newStock, receivedDate: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -967,6 +1117,7 @@ export function InventoryManager({ session }) {
                 <Input
                   type="number"
                   step="0.01"
+                  min="0.01"
                   value={newStock.costPrice}
                   onChange={(e) => setNewStock({ ...newStock, costPrice: parseFloat(e.target.value) || 0 })}
                 />
@@ -982,7 +1133,7 @@ export function InventoryManager({ session }) {
               </div>
             </div>
             <Button onClick={handleUpdateInventory} className="w-full">
-              Update Inventory Item
+              Update Inventory Stock
             </Button>
           </div>
         </DialogContent>

@@ -19,8 +19,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     
     List<Product> findByNameContainingIgnoreCase(String name);
     
-    @Query("SELECT p FROM Product p WHERE p.sku LIKE %:term% OR p.name LIKE %:term%")
-    List<Product> searchBySkuOrName(@Param("term") String term);
+    @Query("SELECT p FROM Product p WHERE LOWER(p.sku) LIKE LOWER(CONCAT('%', :term, '%')) OR LOWER(p.name) LIKE LOWER(CONCAT('%', :term, '%')) OR LOWER(p.activeIngredient) LIKE LOWER(CONCAT('%', :term, '%'))")
+    List<Product> searchBySkuOrNameOrIngredient(@Param("term") String term);
     
     List<Product> findByActiveTrue();
 }

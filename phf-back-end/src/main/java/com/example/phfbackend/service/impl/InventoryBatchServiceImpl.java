@@ -29,7 +29,7 @@ public class InventoryBatchServiceImpl implements InventoryBatchService {
     @Override
     @Transactional(readOnly = true)
     public Optional<InventoryBatch> findById(UUID id) {
-        return inventoryBatchRepository.findById(id);
+        return inventoryBatchRepository.findByIdWithProduct(id);
     }
     
     @Override
@@ -59,7 +59,7 @@ public class InventoryBatchServiceImpl implements InventoryBatchService {
     @Override
     @Transactional(readOnly = true)
     public List<InventoryBatch> findAll() {
-        return inventoryBatchRepository.findAll();
+        return inventoryBatchRepository.findAllWithProduct();
     }
     
     @Override
@@ -71,7 +71,7 @@ public class InventoryBatchServiceImpl implements InventoryBatchService {
     @Override
     @Transactional(readOnly = true)
     public List<InventoryBatch> filterInventoryBatches(InventoryFilterCriteria criteria) {
-        Stream<InventoryBatch> stream = inventoryBatchRepository.findAll().stream();
+        Stream<InventoryBatch> stream = inventoryBatchRepository.findAllWithProduct().stream();
         
         if (criteria.getSearchTerm() != null && !criteria.getSearchTerm().trim().isEmpty()) {
             String term = criteria.getSearchTerm().trim().toLowerCase();
@@ -112,9 +112,14 @@ public class InventoryBatchServiceImpl implements InventoryBatchService {
     public InventoryBatch updateBatch(UUID id, InventoryBatch updatedBatch) {
         InventoryBatch batch = inventoryBatchRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Inventory batch not found: " + id));
-        if (updatedBatch.getSellingPrice() != null) {
-            batch.updateSellingPrice(updatedBatch.getSellingPrice());
-        }
+        
+        // Update all fields
+        batch.updateBatchNumber(updatedBatch.getBatchNumber());
+        batch.updateQuantityOnHand(updatedBatch.getQuantityOnHand());
+        batch.updateCostPrice(updatedBatch.getCostPrice());
+        batch.updateDates(updatedBatch.getReceivedDate(), updatedBatch.getExpiryDate());
+        batch.updateSellingPrice(updatedBatch.getSellingPrice());
+        
         return inventoryBatchRepository.save(batch);
     }
     
@@ -134,5 +139,6 @@ public class InventoryBatchServiceImpl implements InventoryBatchService {
         inventoryBatchRepository.save(batch);
     }
 }
+
 
 

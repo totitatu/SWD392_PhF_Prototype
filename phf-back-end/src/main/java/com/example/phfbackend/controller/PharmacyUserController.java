@@ -5,6 +5,7 @@ import com.example.phfbackend.dto.request.UserRequest;
 import com.example.phfbackend.dto.response.UserResponse;
 import com.example.phfbackend.entities.user.PharmacyUser;
 import com.example.phfbackend.entities.user.UserRole;
+import com.example.phfbackend.repository.PharmacyUserRepository;
 import com.example.phfbackend.service.PharmacyUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 public class PharmacyUserController {
     
     private final PharmacyUserService userService;
+    private final PharmacyUserRepository userRepository;
     
     @GetMapping
     public ResponseEntity<List<UserResponse>> listUsers(
@@ -54,6 +56,13 @@ public class PharmacyUserController {
                 .orElse(ResponseEntity.notFound().build());
     }
     
+    @GetMapping("/by-email/{email}")
+    public ResponseEntity<UserResponse> getUserByEmail(@PathVariable String email) {
+        return userService.findByEmail(email)
+                .map(user -> ResponseEntity.ok(toResponse(user)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+    
     @PostMapping
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody UserRequest request) {
         PharmacyUser user = PharmacyUser.newBuilder()
@@ -70,21 +79,42 @@ public class PharmacyUserController {
     
     @PutMapping("/{id}")
     public ResponseEntity<UserResponse> updateUser(@PathVariable UUID id, @Valid @RequestBody UserRequest request) {
-        PharmacyUser updatedUser = PharmacyUser.newBuilder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
-                .passwordHash(request.getPasswordHash())
-                .role(request.getRole())
-                .active(request.getActive())
-                .build();
+        PharmacyUser user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + id));
         
-        PharmacyUser user = userService.updateUser(id, updatedUser);
-        return ResponseEntity.ok(toResponse(user));
+        // Update profile
+        user.updateProfile(request.getFullName(), request.getEmail());
+        
+        // Update role
+        user.updateRole(request.getRole());
+        
+        // Update password only if provided
+        if (request.getPasswordHash() != null && !request.getPasswordHash().trim().isEmpty()) {
+            user.updatePassword(request.getPasswordHash());
+        }
+        
+        // Update active status
+        if (request.getActive() != null) {
+            if (request.getActive()) {
+                user.activate();
+            } else {
+                user.deactivate();
+            }
+        }
+        
+        PharmacyUser updated = userRepository.save(user);
+        return ResponseEntity.ok(toResponse(updated));
     }
     
     @DeleteMapping("/{id}/deactivate")
     public ResponseEntity<Void> deactivateUser(@PathVariable UUID id) {
         userService.deactivateUser(id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    @PutMapping("/{id}/activate")
+    public ResponseEntity<Void> activateUser(@PathVariable UUID id) {
+        userService.activateUser(id);
         return ResponseEntity.noContent().build();
     }
     
@@ -100,5 +130,6 @@ public class PharmacyUserController {
                 .build();
     }
 }
+
 
 

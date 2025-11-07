@@ -6,6 +6,7 @@ import com.example.phfbackend.dto.ProductFilterCriteria;
 import com.example.phfbackend.dto.request.ProductRequest;
 import com.example.phfbackend.dto.response.ProductResponse;
 import com.example.phfbackend.entities.product.Product;
+import com.example.phfbackend.repository.ProductRepository;
 import com.example.phfbackend.service.GeminiService;
 import com.example.phfbackend.service.ProductService;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ public class ProductController {
     
     private final ProductService productService;
     private final GeminiService geminiService;
+    private final ProductRepository productRepository;
     
     @GetMapping
     public ResponseEntity<List<ProductResponse>> listProducts(
@@ -79,27 +81,52 @@ public class ProductController {
     
     @PutMapping("/{id}")
     public ResponseEntity<ProductResponse> updateProduct(@PathVariable UUID id, @Valid @RequestBody ProductRequest request) {
-        Product updatedProduct = Product.newBuilder()
-                .sku(request.getSku())
-                .name(request.getName())
-                .activeIngredient(request.getActiveIngredient())
-                .dosageForm(request.getDosageForm())
-                .dosageStrength(request.getDosageStrength())
-                .category(request.getCategory())
-                .reorderLevel(request.getReorderLevel())
-                .expiryAlertDays(request.getExpiryAlertDays())
-                .dosage(request.getDosage())
-                .minStock(request.getMinStock())
-                .active(request.getActive())
-                .build();
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + id));
         
-        Product product = productService.updateProduct(id, updatedProduct);
-        return ResponseEntity.ok(toResponse(product));
+        // Update product details
+        product.updateDetails(
+                request.getSku(),
+                request.getName(),
+                request.getActiveIngredient(),
+                request.getDosageForm(),
+                request.getDosageStrength(),
+                request.getCategory()
+        );
+        
+        // Update alerts configuration
+        product.configureAlerts(request.getReorderLevel(), request.getExpiryAlertDays());
+        
+        // Update optional fields
+        if (request.getDosage() != null) {
+            product.updateDosage(request.getDosage());
+        }
+        if (request.getMinStock() != null) {
+            product.updateMinStock(request.getMinStock());
+        }
+        
+        // Update active status
+        if (request.getActive() != null) {
+            if (request.getActive()) {
+                product.activate();
+            } else {
+                product.deactivate();
+            }
+        }
+        
+        Product updated = productRepository.save(product);
+        return ResponseEntity.ok(toResponse(updated));
     }
     
     @DeleteMapping("/{id}/deactivate")
     public ResponseEntity<Void> deactivateProduct(@PathVariable UUID id) {
         productService.deactivateProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    @PutMapping("/{id}/activate")
+    public ResponseEntity<Void> activateProduct(@PathVariable UUID id) {
+        productService.activateProduct(id);
         return ResponseEntity.noContent().build();
     }
     

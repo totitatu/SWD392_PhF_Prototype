@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { projectId, publicAnonKey } from '../../utils/supabase/info';
+import { userAPI } from '../../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -45,12 +46,14 @@ export function UserManagement({ session }) {
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
     name: '',
     role: 'staff',
+    active: true,
   });
 
   useEffect(() => {
@@ -59,24 +62,16 @@ export function UserManagement({ session }) {
 
   useEffect(() => {
     filterUsers();
-  }, [users, searchTerm, roleFilter]);
+  }, [users, searchTerm, roleFilter, statusFilter]);
 
   const fetchUsers = async () => {
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/users`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.users || []);
-      }
+      setLoading(true);
+      const data = await userAPI.list();
+      setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setError('Failed to fetch users: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -90,16 +85,31 @@ export function UserManagement({ session }) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(user =>
         user.email?.toLowerCase().includes(term) ||
-        user.user_metadata?.name?.toLowerCase().includes(term) ||
+        user.fullName?.toLowerCase().includes(term) ||
         user.id?.toLowerCase().includes(term)
       );
     }
 
     // Role filter
     if (roleFilter !== 'all') {
+      const roleMap = {
+        'owner': 'OWNER',
+        'admin': 'PHARMACIST',
+        'staff': 'SALES_STAFF'
+      };
+      const targetRole = roleMap[roleFilter] || roleFilter.toUpperCase();
       filtered = filtered.filter(user => 
-        (user.user_metadata?.role || 'staff') === roleFilter
+        (user.role || 'SALES_STAFF') === targetRole
       );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'active') {
+        filtered = filtered.filter(user => user.active !== false);
+      } else if (statusFilter === 'inactive') {
+        filtered = filtered.filter(user => user.active === false);
+      }
     }
 
     setFilteredUsers(filtered);
@@ -116,28 +126,25 @@ export function UserManagement({ session }) {
     setSuccess('');
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/auth/signup`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify(newUser),
-        }
-      );
+      // Map frontend role to backend enum
+      const roleMap = {
+        'owner': 'OWNER',
+        'admin': 'PHARMACIST',
+        'staff': 'SALES_STAFF'
+      };
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create user');
-      }
+      await userAPI.create({
+        fullName: newUser.name,
+        email: newUser.email,
+        passwordHash: newUser.password, // Backend should hash this, but for now we send it
+        role: roleMap[newUser.role] || 'SALES_STAFF',
+        active: true,
+      });
 
       setSuccess('User created successfully!');
       setTimeout(() => {
         setShowAddDialog(false);
-        setNewUser({ email: '', password: '', name: '', role: 'staff' });
+        setNewUser({ email: '', password: '', name: '', role: 'staff', active: true });
         setSuccess('');
         fetchUsers();
       }, 2000);
@@ -155,11 +162,18 @@ export function UserManagement({ session }) {
 
   const handleEditUser = (user) => {
     setEditingUser(user);
+    // Map backend role to frontend role
+    const roleMap = {
+      'OWNER': 'owner',
+      'PHARMACIST': 'admin',
+      'SALES_STAFF': 'staff'
+    };
     setNewUser({
       email: user.email || '',
       password: '',
-      name: user.user_metadata?.name || '',
-      role: user.user_metadata?.role || 'staff',
+      name: user.fullName || '',
+      role: roleMap[user.role] || 'staff',
+      active: user.active !== false,
     });
     setShowEditDialog(true);
   };
@@ -172,34 +186,26 @@ export function UserManagement({ session }) {
     setSuccess('');
 
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/users/${editingUser.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            name: newUser.name,
-            role: newUser.role,
-            ...(newUser.password && { password: newUser.password }),
-          }),
-        }
-      );
+      // Map frontend role to backend enum
+      const roleMap = {
+        'owner': 'OWNER',
+        'admin': 'PHARMACIST',
+        'staff': 'SALES_STAFF'
+      };
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update user');
-      }
+      await userAPI.update(editingUser.id, {
+        fullName: newUser.name,
+        email: editingUser.email, // Email should not change
+        passwordHash: newUser.password || undefined, // Only send if provided
+        role: roleMap[newUser.role] || 'SALES_STAFF',
+        active: newUser.active,
+      });
 
       setSuccess('User updated successfully!');
       setTimeout(() => {
         setShowEditDialog(false);
         setEditingUser(null);
-        setNewUser({ email: '', password: '', name: '', role: 'staff' });
+        setNewUser({ email: '', password: '', name: '', role: 'staff', active: true });
         setSuccess('');
         fetchUsers();
       }, 2000);
@@ -211,35 +217,39 @@ export function UserManagement({ session }) {
   };
 
   const handleDeactivateUser = async (user) => {
-    if (!confirm(`Are you sure you want to deactivate ${user.user_metadata?.name || user.email}?`)) return;
+    if (!confirm(`Are you sure you want to deactivate ${user.fullName || user.email}?`)) return;
 
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/users/${user.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isActive: false }),
-        }
-      );
-
-      if (response.ok) {
-        await fetchUsers();
-      }
+      await userAPI.deactivate(user.id);
+      await fetchUsers();
+      setSuccess('User deactivated successfully!');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       console.error('Error deactivating user:', error);
+      setError('Failed to deactivate user: ' + (error.message || 'Unknown error'));
+    }
+  };
+
+  const handleActivateUser = async (user) => {
+    if (!confirm(`Are you sure you want to activate ${user.fullName || user.email}?`)) return;
+
+    try {
+      await userAPI.activate(user.id);
+      await fetchUsers();
+      setSuccess('User activated successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (error) {
+      console.error('Error activating user:', error);
+      setError('Failed to activate user: ' + (error.message || 'Unknown error'));
     }
   };
 
   const getRoleBadgeVariant = (role) => {
-    switch (role) {
-      case 'owner':
+    const roleUpper = (role || '').toUpperCase();
+    switch (roleUpper) {
+      case 'OWNER':
         return 'default';
-      case 'admin':
+      case 'PHARMACIST':
         return 'secondary';
       default:
         return 'outline';
@@ -248,12 +258,22 @@ export function UserManagement({ session }) {
 
   const userStats = {
     total: users.length,
-    admins: users.filter(u => ['owner', 'admin'].includes(u.user_metadata?.role)).length,
-    staff: users.filter(u => u.user_metadata?.role === 'staff').length,
+    admins: users.filter(u => ['OWNER', 'PHARMACIST'].includes(u.role)).length,
+    staff: users.filter(u => u.role === 'SALES_STAFF').length,
   };
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="text-green-600 text-sm bg-green-50 p-3 rounded-md">
+          {success}
+        </div>
+      )}
       <Tabs defaultValue="users" className="space-y-4">
         <TabsList>
           <TabsTrigger value="users">
@@ -414,9 +434,9 @@ export function UserManagement({ session }) {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h4>{session.user.user_metadata?.name || 'User'}</h4>
-                  <Badge variant={getRoleBadgeVariant(session.user.user_metadata?.role || 'staff')}>
-                    {session.user.user_metadata?.role || 'staff'}
+                  <h4>{session.user.user_metadata?.name || session.user.email || 'User'}</h4>
+                  <Badge variant={getRoleBadgeVariant(session.user.user_metadata?.role || 'STAFF')}>
+                    {session.user.user_metadata?.role || 'STAFF'}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
@@ -466,7 +486,7 @@ export function UserManagement({ session }) {
           <div className="flex flex-col gap-4">
             <CardTitle>User List</CardTitle>
             <div className="flex gap-4">
-              <div className="relative flex-1">
+              <div className="relative flex-[3]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by name, email..."
@@ -475,16 +495,29 @@ export function UserManagement({ session }) {
                   className="pl-10"
                 />
               </div>
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm"
-              >
-                <option value="all">All Roles</option>
-                <option value="owner">Owner</option>
-                <option value="admin">Admin</option>
-                <option value="staff">Staff</option>
-              </select>
+              <div className="flex-1">
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm"
+                >
+                  <option value="all">All Roles</option>
+                  <option value="owner">Owner</option>
+                  <option value="admin">Admin</option>
+                  <option value="staff">Staff</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -508,17 +541,17 @@ export function UserManagement({ session }) {
                 {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>
-                      {user.user_metadata?.name || 'N/A'}
+                      {user.fullName || 'N/A'}
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Badge variant={getRoleBadgeVariant(user.user_metadata?.role || 'staff')}>
-                        {user.user_metadata?.role || 'staff'}
+                      <Badge variant={getRoleBadgeVariant(user.role || 'SALES_STAFF')}>
+                        {user.role === 'PHARMACIST' ? 'Admin' : user.role === 'SALES_STAFF' ? 'Staff' : user.role || 'Staff'}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={user.isActive === false ? 'destructive' : 'outline'}>
-                        {user.isActive === false ? 'Inactive' : 'Active'}
+                      <Badge variant={user.active === false ? 'destructive' : 'outline'}>
+                        {user.active === false ? 'Inactive' : 'Active'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -537,15 +570,28 @@ export function UserManagement({ session }) {
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        {user.isActive !== false && user.id !== session.user.id && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeactivateUser(user)}
-                            className="text-destructive"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
+                        {user.id !== session.user.id && (
+                          user.active === false ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleActivateUser(user)}
+                              className="text-green-600 hover:text-green-700"
+                              title="Activate user"
+                            >
+                              <Users className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeactivateUser(user)}
+                              className="text-destructive"
+                              title="Deactivate user"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )
                         )}
                       </div>
                     </TableCell>
@@ -575,7 +621,7 @@ export function UserManagement({ session }) {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Name</p>
-                  <p className="font-medium">{selectedUser.user_metadata?.name || 'N/A'}</p>
+                  <p className="font-medium">{selectedUser.fullName || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Email</p>
@@ -583,14 +629,14 @@ export function UserManagement({ session }) {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Role</p>
-                  <Badge variant={getRoleBadgeVariant(selectedUser.user_metadata?.role || 'staff')}>
-                    {selectedUser.user_metadata?.role || 'staff'}
+                  <Badge variant={getRoleBadgeVariant(selectedUser.role || 'SALES_STAFF')}>
+                    {selectedUser.role === 'PHARMACIST' ? 'Admin' : selectedUser.role === 'SALES_STAFF' ? 'Staff' : selectedUser.role || 'Staff'}
                   </Badge>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Status</p>
-                  <Badge variant={selectedUser.isActive === false ? 'destructive' : 'outline'}>
-                    {selectedUser.isActive === false ? 'Inactive' : 'Active'}
+                  <Badge variant={selectedUser.active === false ? 'destructive' : 'outline'}>
+                    {selectedUser.active === false ? 'Inactive' : 'Active'}
                   </Badge>
                 </div>
                 <div>
@@ -599,7 +645,7 @@ export function UserManagement({ session }) {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Created</p>
-                  <p>{new Date(selectedUser.created_at).toLocaleDateString()}</p>
+                  <p>{selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'N/A'}</p>
                 </div>
               </div>
             </div>
@@ -612,7 +658,7 @@ export function UserManagement({ session }) {
         setShowEditDialog(open);
         if (!open) {
           setEditingUser(null);
-          setNewUser({ email: '', password: '', name: '', role: 'staff' });
+          setNewUser({ email: '', password: '', name: '', role: 'staff', active: true });
           setError('');
           setSuccess('');
         }
@@ -664,6 +710,26 @@ export function UserManagement({ session }) {
                   <SelectItem value="staff">Sales Staff</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Account Status</Label>
+              <Select 
+                value={newUser.active ? 'active' : 'inactive'} 
+                onValueChange={(value) => setNewUser({ ...newUser, active: value === 'active' })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive (Deactivated)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {newUser.active 
+                  ? 'User can log in and access the system' 
+                  : 'User cannot log in and is deactivated'}
+              </p>
             </div>
             {error && (
               <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">

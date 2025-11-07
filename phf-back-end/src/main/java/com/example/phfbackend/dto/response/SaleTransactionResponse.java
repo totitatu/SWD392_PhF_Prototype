@@ -1,5 +1,6 @@
 package com.example.phfbackend.dto.response;
 
+import com.example.phfbackend.entities.sale.PaymentMethod;
 import lombok.Builder;
 import lombok.Data;
 
@@ -19,6 +20,9 @@ public class SaleTransactionResponse {
     private List<SaleTransactionLineResponse> lineItems;
     private BigDecimal totalDiscount;
     private BigDecimal totalAmount;
+    private PaymentMethod paymentMethod;
+    private String prescriptionImageUrl;
+    private String customerEmail;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

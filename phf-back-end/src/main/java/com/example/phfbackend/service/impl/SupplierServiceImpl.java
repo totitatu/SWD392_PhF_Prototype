@@ -82,6 +82,14 @@ public class SupplierServiceImpl implements SupplierService {
         if (updatedSupplier.getNotes() != null) {
             supplier.updateNotes(updatedSupplier.getNotes());
         }
+        // Update active status
+        if (updatedSupplier.isActive() != supplier.isActive()) {
+            if (updatedSupplier.isActive()) {
+                supplier.activate();
+            } else {
+                supplier.deactivate();
+            }
+        }
         return supplierRepository.save(supplier);
     }
     
@@ -106,5 +114,6 @@ public class SupplierServiceImpl implements SupplierService {
         supplierRepository.deleteById(id);
     }
 }
+
 
 

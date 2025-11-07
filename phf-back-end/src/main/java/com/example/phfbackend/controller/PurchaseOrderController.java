@@ -18,6 +18,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -36,15 +37,26 @@ public class PurchaseOrderController {
     private final GeminiService geminiService;
     
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<List<PurchaseOrderResponse>> listPurchaseOrders(
             @RequestParam(required = false) String searchTerm,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) UUID supplierId,
             @RequestParam(required = false) LocalDate startDate,
             @RequestParam(required = false) LocalDate endDate) {
+        PurchaseOrderStatus statusEnum = null;
+        if (status != null && !status.trim().isEmpty()) {
+            try {
+                // Convert to uppercase to match enum values
+                statusEnum = PurchaseOrderStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Invalid status value, will be ignored
+            }
+        }
+        
         PurchaseOrderFilterCriteria criteria = PurchaseOrderFilterCriteria.builder()
                 .searchTerm(searchTerm)
-                .status(status != null ? PurchaseOrderStatus.valueOf(status) : null)
+                .status(statusEnum)
                 .supplierId(supplierId)
                 .startDate(startDate)
                 .endDate(endDate)
@@ -65,6 +77,7 @@ public class PurchaseOrderController {
     }
     
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<PurchaseOrderResponse> getPurchaseOrder(@PathVariable UUID id) {
         return purchaseOrderService.findById(id)
                 .map(order -> ResponseEntity.ok(toResponse(order)))
@@ -101,6 +114,31 @@ public class PurchaseOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
     }
     
+    @PutMapping("/{id}/status")
+    @Transactional
+    public ResponseEntity<PurchaseOrderResponse> updateOrderStatus(
+            @PathVariable UUID id,
+            @RequestParam String status) {
+        try {
+            PurchaseOrderStatus statusEnum = PurchaseOrderStatus.valueOf(status.toUpperCase());
+            purchaseOrderService.updateStatus(id, statusEnum);
+            // Fetch the updated order with all relations loaded
+            PurchaseOrder order = purchaseOrderService.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Purchase order not found: " + id));
+            return ResponseEntity.ok(toResponse(order));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    @PostMapping("/{id}/send")
+    public ResponseEntity<PurchaseOrderResponse> sendPurchaseOrder(
+            @PathVariable UUID id,
+            @RequestParam(required = false) LocalDate expectedDate) {
+        PurchaseOrder order = purchaseOrderService.markOrdered(id, expectedDate);
+        return ResponseEntity.ok(toResponse(order));
+    }
+    
     @PutMapping("/{id}")
     public ResponseEntity<PurchaseOrderResponse> updatePurchaseOrder(@PathVariable UUID id, @Valid @RequestBody PurchaseOrderRequest request) {
         PurchaseOrder order = purchaseOrderService.findById(id)
@@ -129,14 +167,6 @@ public class PurchaseOrderController {
         
         PurchaseOrder updated = purchaseOrderService.createPurchaseOrder(order);
         return ResponseEntity.ok(toResponse(updated));
-    }
-    
-    @PostMapping("/{id}/send")
-    public ResponseEntity<PurchaseOrderResponse> sendPurchaseOrder(
-            @PathVariable UUID id,
-            @RequestParam(required = false) LocalDate expectedDate) {
-        PurchaseOrder order = purchaseOrderService.markOrdered(id, expectedDate);
-        return ResponseEntity.ok(toResponse(order));
     }
     
     @DeleteMapping("/{id}")

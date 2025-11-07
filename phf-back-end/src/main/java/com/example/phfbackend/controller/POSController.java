@@ -1,13 +1,18 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.response.ProductResponse;
+import com.example.phfbackend.dto.response.POSProductResponse;
+import com.example.phfbackend.entities.inventory.InventoryBatch;
 import com.example.phfbackend.entities.product.Product;
+import com.example.phfbackend.service.InventoryBatchService;
 import com.example.phfbackend.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -22,19 +27,57 @@ import java.util.stream.Collectors;
 public class POSController {
     
     private final ProductService productService;
+    private final InventoryBatchService inventoryBatchService;
     
     /**
      * UC44 - Tìm kiếm sản phẩm (POS)
      * Nhân viên nhà thuốc tìm kiếm sản phẩm tại điểm bán hàng
+     * Search by product name, brand, or ingredient
+     * Returns products with name, price, and stock quantity
      */
     @GetMapping("/products/search")
-    public ResponseEntity<List<ProductResponse>> searchProductsForPOS(@RequestParam String term) {
-        List<Product> products = productService.search(term);
-        List<ProductResponse> responses = products.stream()
-                .filter(Product::isActive)
-                .map(this::toResponse)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(responses);
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<POSProductResponse>> searchProductsForPOS(@RequestParam String term) {
+        try {
+            List<Product> products = productService.search(term);
+            List<POSProductResponse> responses = products.stream()
+                    .filter(Product::isActive)
+                    .map(this::toPOSResponse)
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(responses);
+        } catch (Exception e) {
+            // E1: Database query timeout or E2: Inventory data corrupted
+            throw new RuntimeException("Search unavailable. Please try again or refresh.", e);
+        }
+    }
+    
+    /**
+     * Get suggested products for POS (5 products with available stock)
+     * Hiển thị 5 sản phẩm gợi ý khi chưa có search term
+     */
+    @GetMapping("/products/suggested")
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<POSProductResponse>> getSuggestedProducts() {
+        try {
+            // Get all active products
+            List<Product> allProducts = productService.findAll();
+            
+            // Filter active products and convert to POS response
+            List<POSProductResponse> allResponses = allProducts.stream()
+                    .filter(Product::isActive)
+                    .map(this::toPOSResponse)
+                    .filter(response -> response.getStockQuantity() > 0) // Only products with stock
+                    .collect(Collectors.toList());
+            
+            // Return first 5 products (or all if less than 5)
+            List<POSProductResponse> suggested = allResponses.stream()
+                    .limit(5)
+                    .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(suggested);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load suggested products. Please try again.", e);
+        }
     }
     
     /**
@@ -42,31 +85,51 @@ public class POSController {
      * Nhân viên nhà thuốc quét mã vạch sản phẩm
      */
     @GetMapping("/products/barcode/{barcode}")
-    public ResponseEntity<ProductResponse> getProductByBarcode(@PathVariable String barcode) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<POSProductResponse> getProductByBarcode(@PathVariable String barcode) {
         return productService.findBySku(barcode)
                 .filter(Product::isActive)
-                .map(product -> ResponseEntity.ok(toResponse(product)))
+                .map(product -> ResponseEntity.ok(toPOSResponse(product)))
                 .orElse(ResponseEntity.notFound().build());
     }
     
-    private ProductResponse toResponse(Product product) {
-        return ProductResponse.builder()
+    /**
+     * Convert Product to POSProductResponse with inventory information
+     */
+    private POSProductResponse toPOSResponse(Product product) {
+        UUID productId = product.getId();
+        
+        // Get all active inventory batches for this product
+        List<InventoryBatch> batches = inventoryBatchService.findByProductId(productId);
+        List<InventoryBatch> activeBatches = batches.stream()
+                .filter(InventoryBatch::isActive)
+                .filter(b -> b.getQuantityOnHand() > 0)
+                .collect(Collectors.toList());
+        
+        // Calculate total stock quantity
+        int stockQuantity = activeBatches.stream()
+                .mapToInt(InventoryBatch::getQuantityOnHand)
+                .sum();
+        
+        // Get selling price (use the first available batch's price, or 0 if no stock)
+        BigDecimal sellingPrice = activeBatches.isEmpty() 
+                ? BigDecimal.ZERO 
+                : activeBatches.get(0).getSellingPrice();
+        
+        return POSProductResponse.builder()
                 .id(product.getId())
                 .sku(product.getSku())
                 .name(product.getName())
                 .activeIngredient(product.getActiveIngredient())
                 .dosageForm(product.getDosageForm())
                 .dosageStrength(product.getDosageStrength())
-                .category(product.getCategory())
-                .reorderLevel(product.getReorderLevel())
-                .expiryAlertDays(product.getExpiryAlertDays())
                 .dosage(product.getDosage())
-                .minStock(product.getMinStock())
-                .active(product.isActive())
-                .createdAt(product.getCreatedAt())
-                .updatedAt(product.getUpdatedAt())
+                .sellingPrice(sellingPrice)
+                .stockQuantity(stockQuantity)
+                .available(stockQuantity > 0)
                 .build();
     }
 }
+
 
 

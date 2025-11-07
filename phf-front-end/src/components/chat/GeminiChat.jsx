@@ -82,20 +82,20 @@ export function GeminiChat({ session }) {
 
   if (!isOpen) {
     return (
-      <div className="fixed bottom-4 right-4 z-50">
+      <div className="fixed bottom-6 right-6 z-50">
         <Button
           onClick={() => setIsOpen(true)}
           size="lg"
-          className="rounded-full w-14 h-14 shadow-lg"
+          className="rounded-full w-20 h-20 shadow-2xl hover:shadow-3xl transition-shadow"
         >
-          <MessageCircle className="w-6 h-6" />
+          <MessageCircle className="w-10 h-10" />
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-96">
+    <div className="fixed bottom-6 right-6 z-50 w-96">
       <Card className="shadow-2xl flex flex-col" style={{ height: isMinimized ? 'auto' : '600px' }}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2">

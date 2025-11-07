@@ -56,6 +56,7 @@ export function PurchaseOrders({ session }) {
     productId: '',
     productName: '',
     quantity: 0,
+    unitCost: 0,
   });
 
   useEffect(() => {
@@ -69,7 +70,7 @@ export function PurchaseOrders({ session }) {
   const fetchData = async () => {
     try {
       const [ordersData, suppliersData, productsData] = await Promise.all([
-        purchaseOrderAPI.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
+        purchaseOrderAPI.list({ status: statusFilter !== 'all' ? statusFilter.toUpperCase() : undefined }),
         supplierAPI.list({ active: true }),
         productAPI.list({ active: true }),
       ]);
@@ -92,14 +93,22 @@ export function PurchaseOrders({ session }) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(order =>
         order.id?.toLowerCase().includes(term) ||
+        order.orderCode?.toLowerCase().includes(term) ||
         order.supplierName?.toLowerCase().includes(term) ||
-        order.supplierEmail?.toLowerCase().includes(term)
+        order.supplierEmail?.toLowerCase().includes(term) ||
+        (order.lineItems || order.items || []).some(item => 
+          item.productName?.toLowerCase().includes(term)
+        )
       );
     }
 
     // Status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(order => order.status === statusFilter);
+      filtered = filtered.filter(order => {
+        const orderStatus = (order.status || '').toUpperCase();
+        const filterStatus = statusFilter.toUpperCase();
+        return orderStatus === filterStatus;
+      });
     }
 
     setFilteredOrders(filtered);
@@ -118,7 +127,7 @@ export function PurchaseOrders({ session }) {
   };
 
   const handleAddItem = () => {
-    if (orderItem.productId && orderItem.quantity > 0) {
+    if (orderItem.productId && orderItem.quantity > 0 && orderItem.unitCost > 0) {
       const product = products.find((p) => p.id === orderItem.productId);
       setNewOrder({
         ...newOrder,
@@ -130,7 +139,7 @@ export function PurchaseOrders({ session }) {
           },
         ],
       });
-      setOrderItem({ productId: '', productName: '', quantity: 0 });
+      setOrderItem({ productId: '', productName: '', quantity: 0, unitCost: 0 });
     }
   };
 
@@ -145,12 +154,25 @@ export function PurchaseOrders({ session }) {
     if (!newOrder.supplierId || newOrder.items.length === 0) return;
 
     try {
+      // Generate order code (e.g., PO-YYYYMMDD-HHMMSS)
+      const now = new Date();
+      const orderCode = `PO-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+      
+      // Get today's date and expected date (7 days from now)
+      const today = new Date().toISOString().split('T')[0];
+      const expectedDate = new Date();
+      expectedDate.setDate(expectedDate.getDate() + 7);
+      const expectedDateStr = expectedDate.toISOString().split('T')[0];
+
       await purchaseOrderAPI.create({
+        orderCode: orderCode,
         supplierId: newOrder.supplierId,
+        orderDate: today,
+        expectedDate: expectedDateStr,
         lineItems: newOrder.items.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
-          unitCost: 0, // Can be calculated based on cost prices
+          unitCost: item.unitCost || 0.01,
         })),
       });
       await fetchData();
@@ -167,31 +189,75 @@ export function PurchaseOrders({ session }) {
     }
   };
 
-  const handleViewOrder = (order) => {
-    setSelectedOrder(order);
-    setShowViewDialog(true);
+  const handleViewOrder = async (order) => {
+    try {
+      // Fetch full order details to ensure lineItems are loaded
+      const fullOrder = await purchaseOrderAPI.getById(order.id);
+      setSelectedOrder(fullOrder);
+      setShowViewDialog(true);
+    } catch (error) {
+      console.error('Error fetching order details:', error);
+      // Fallback to order from list if fetch fails
+      setSelectedOrder(order);
+      setShowViewDialog(true);
+    }
   };
 
-  const handleEditDraft = (order) => {
-    if (order.status !== 'draft') return;
-    setEditingOrder(order);
-    setNewOrder({
-      supplierId: order.supplierId || '',
-      supplierName: order.supplierName || '',
-      supplierEmail: order.supplierEmail || '',
-      items: order.items || [],
-    });
-    setShowEditDialog(true);
+  const handleEditDraft = async (order) => {
+    if (order.status !== 'DRAFT' && order.status !== 'draft') return;
+    try {
+      // Fetch full order details to ensure lineItems are loaded
+      const fullOrder = await purchaseOrderAPI.getById(order.id);
+      setEditingOrder(fullOrder);
+      const lineItems = fullOrder.lineItems || fullOrder.items || [];
+      setNewOrder({
+        supplierId: fullOrder.supplierId || '',
+        supplierName: fullOrder.supplierName || '',
+        supplierEmail: '',
+        items: lineItems.map(item => ({
+          productId: item.productId,
+          productName: item.productName || '',
+          quantity: item.quantity || 0,
+          unitCost: item.unitCost || 0,
+        })),
+      });
+      setShowEditDialog(true);
+    } catch (error) {
+      console.error('Error fetching order details:', error);
+      // Fallback to order from list if fetch fails
+      const lineItems = order.lineItems || order.items || [];
+      setEditingOrder(order);
+      setNewOrder({
+        supplierId: order.supplierId || '',
+        supplierName: order.supplierName || '',
+        supplierEmail: '',
+        items: lineItems.map(item => ({
+          productId: item.productId,
+          productName: item.productName || '',
+          quantity: item.quantity || 0,
+          unitCost: item.unitCost || 0,
+        })),
+      });
+      setShowEditDialog(true);
+    }
   };
 
   const handleUpdateDraft = async () => {
     try {
+      const today = new Date().toISOString().split('T')[0];
+      const expectedDate = new Date();
+      expectedDate.setDate(expectedDate.getDate() + 7);
+      const expectedDateStr = expectedDate.toISOString().split('T')[0];
+
       await purchaseOrderAPI.update(editingOrder.id, {
+        orderCode: editingOrder.orderCode || `PO-${Date.now()}`,
         supplierId: newOrder.supplierId,
+        orderDate: editingOrder.orderDate || today,
+        expectedDate: editingOrder.expectedDate || expectedDateStr,
         lineItems: newOrder.items.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
-          unitCost: 0,
+          unitCost: item.unitCost || 0.01,
         })),
       });
       await fetchData();
@@ -223,12 +289,25 @@ export function PurchaseOrders({ session }) {
 
   const handleUpdateStatus = async (orderId, status) => {
     try {
-      if (status === 'ordered') {
-        await purchaseOrderAPI.send(orderId);
-      } else {
-        await purchaseOrderAPI.update(orderId, { status });
-      }
+      const statusUpper = (status || '').toUpperCase();
+      
+      // Use the new updateStatus endpoint
+      await purchaseOrderAPI.updateStatus(orderId, statusUpper);
+      
+      // Refresh data
       await fetchData();
+      
+      // Update selectedOrder if it's the same order being viewed
+      if (selectedOrder && selectedOrder.id === orderId) {
+        const updatedOrder = await purchaseOrderAPI.getById(orderId);
+        setSelectedOrder(updatedOrder);
+      }
+      
+      // Update editingOrder if it's the same order being edited
+      if (editingOrder && editingOrder.id === orderId) {
+        const updatedOrder = await purchaseOrderAPI.getById(orderId);
+        setEditingOrder(updatedOrder);
+      }
     } catch (error) {
       console.error('Error updating order status:', error);
       alert('Error updating order status: ' + (error.message || 'Unknown error'));
@@ -236,11 +315,15 @@ export function PurchaseOrders({ session }) {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'ordered':
+    const statusUpper = (status || '').toUpperCase();
+    switch (statusUpper) {
+      case 'ORDERED':
         return 'bg-blue-100 text-blue-800';
-      case 'received':
+      case 'RECEIVED':
         return 'bg-green-100 text-green-800';
+      case 'CANCELLED':
+        return 'bg-red-100 text-red-800';
+      case 'DRAFT':
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -299,13 +382,18 @@ export function PurchaseOrders({ session }) {
 
               <div className="border rounded-lg p-4 space-y-3">
                 <h3 className="text-sm">Add Items</h3>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   <div className="col-span-2">
                     <Select
                       value={orderItem.productId}
-                      onValueChange={(value) =>
-                        setOrderItem({ ...orderItem, productId: value })
-                      }
+                      onValueChange={(value) => {
+                        const product = products.find(p => p.id === value);
+                        setOrderItem({ 
+                          ...orderItem, 
+                          productId: value,
+                          productName: product?.name || ''
+                        });
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select product" />
@@ -321,6 +409,7 @@ export function PurchaseOrders({ session }) {
                   </div>
                   <Input
                     type="number"
+                    min="1"
                     placeholder="Qty"
                     value={orderItem.quantity || ''}
                     onChange={(e) =>
@@ -330,8 +419,26 @@ export function PurchaseOrders({ session }) {
                       })
                     }
                   />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="Unit Cost"
+                    value={orderItem.unitCost || ''}
+                    onChange={(e) =>
+                      setOrderItem({
+                        ...orderItem,
+                        unitCost: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
                 </div>
-                <Button onClick={handleAddItem} variant="outline" className="w-full">
+                <Button 
+                  onClick={handleAddItem} 
+                  variant="outline" 
+                  className="w-full"
+                  disabled={!orderItem.productId || orderItem.quantity <= 0 || orderItem.unitCost <= 0}
+                >
                   Add Item
                 </Button>
               </div>
@@ -345,7 +452,7 @@ export function PurchaseOrders({ session }) {
                       className="flex justify-between items-center text-sm py-2 border-b last:border-b-0"
                     >
                       <span>
-                        {item.productName} x {item.quantity}
+                        {item.productName} x {item.quantity} @ ${item.unitCost?.toFixed(2) || '0.00'}
                       </span>
                       <Button
                         variant="ghost"
@@ -377,25 +484,28 @@ export function PurchaseOrders({ session }) {
           <div className="flex flex-col gap-4">
             <CardTitle>Recent Orders</CardTitle>
             <div className="flex gap-4">
-              <div className="relative flex-1">
+              <div className="relative flex-[3]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by ID, supplier name..."
+                  placeholder="Search by ID, supplier name, order code..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm"
-              >
-                <option value="all">All Status</option>
-                <option value="draft">Draft</option>
-                <option value="ordered">Ordered</option>
-                <option value="received">Received</option>
-              </select>
+              <div className="flex-1">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm"
+                >
+                  <option value="all">All Status</option>
+                  <option value="DRAFT">Draft</option>
+                  <option value="ORDERED">Ordered</option>
+                  <option value="RECEIVED">Received</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -416,14 +526,30 @@ export function PurchaseOrders({ session }) {
                 <TableRow key={order.id}>
                   <TableCell className="text-xs">{order.id.slice(-8)}</TableCell>
                   <TableCell>{order.supplierName}</TableCell>
-                  <TableCell>{order.items?.length || 0} items</TableCell>
+                  <TableCell>{(order.lineItems || order.items || [])?.length || 0} items</TableCell>
                   <TableCell>
                     {new Date(order.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
-                    <Badge className={getStatusColor(order.status)}>
-                      {order.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(order.status)}>
+                        {order.status}
+                      </Badge>
+                      <Select
+                        value={order.status || 'DRAFT'}
+                        onValueChange={(value) => handleUpdateStatus(order.id, value)}
+                      >
+                        <SelectTrigger className="w-32 h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="DRAFT">Draft</SelectItem>
+                          <SelectItem value="ORDERED">Ordered</SelectItem>
+                          <SelectItem value="RECEIVED">Received</SelectItem>
+                          <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
@@ -434,7 +560,7 @@ export function PurchaseOrders({ session }) {
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
-                      {order.status === 'draft' && (
+                      {(order.status === 'DRAFT' || order.status === 'draft') && (
                         <>
                           <Button
                             size="sm"
@@ -453,7 +579,7 @@ export function PurchaseOrders({ session }) {
                           </Button>
                         </>
                       )}
-                      {order.status === 'ordered' && (
+                      {(order.status === 'ORDERED' || order.status === 'ordered') && (
                         <Button
                           size="sm"
                           onClick={() => handleUpdateStatus(order.id, 'received')}
@@ -493,9 +619,25 @@ export function PurchaseOrders({ session }) {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Status</p>
-                  <Badge className={getStatusColor(selectedOrder.status)}>
-                    {selectedOrder.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={getStatusColor(selectedOrder.status)}>
+                      {selectedOrder.status}
+                    </Badge>
+                    <Select
+                      value={selectedOrder.status || 'DRAFT'}
+                      onValueChange={(value) => handleUpdateStatus(selectedOrder.id, value)}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DRAFT">Draft</SelectItem>
+                        <SelectItem value="ORDERED">Ordered</SelectItem>
+                        <SelectItem value="RECEIVED">Received</SelectItem>
+                        <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Supplier</p>
@@ -510,12 +652,33 @@ export function PurchaseOrders({ session }) {
               <div>
                 <h4 className="text-sm font-semibold mb-2">Items</h4>
                 <div className="space-y-2">
-                  {selectedOrder.items?.map((item, index) => (
-                    <div key={index} className="flex justify-between p-2 border rounded-lg">
-                      <span>{item.productName} × {item.quantity}</span>
-                    </div>
-                  ))}
+                  {(selectedOrder.lineItems || selectedOrder.items || []).length > 0 ? (
+                    (selectedOrder.lineItems || selectedOrder.items || []).map((item, index) => (
+                      <div key={item.id || index} className="flex justify-between p-2 border rounded-lg">
+                        <div className="flex-1">
+                          <span className="font-medium">{item.productName || 'Unknown Product'}</span>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Quantity: {item.quantity} × ${item.unitCost?.toFixed(2) || '0.00'} = ${((item.quantity || 0) * (item.unitCost || 0)).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No items in this order</p>
+                  )}
                 </div>
+                {(selectedOrder.lineItems || selectedOrder.items || []).length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex justify-between text-sm font-semibold">
+                      <span>Total:</span>
+                      <span>
+                        ${((selectedOrder.lineItems || selectedOrder.items || []).reduce((sum, item) => 
+                          sum + ((item.quantity || 0) * (item.unitCost || 0)), 0
+                        )).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -550,13 +713,18 @@ export function PurchaseOrders({ session }) {
 
             <div className="border rounded-lg p-4 space-y-3">
               <h3 className="text-sm">Add Items</h3>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <div className="col-span-2">
                   <Select
                     value={orderItem.productId}
-                    onValueChange={(value) =>
-                      setOrderItem({ ...orderItem, productId: value })
-                    }
+                    onValueChange={(value) => {
+                      const product = products.find(p => p.id === value);
+                      setOrderItem({ 
+                        ...orderItem, 
+                        productId: value,
+                        productName: product?.name || ''
+                      });
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select product" />
@@ -572,6 +740,7 @@ export function PurchaseOrders({ session }) {
                 </div>
                 <Input
                   type="number"
+                  min="1"
                   placeholder="Qty"
                   value={orderItem.quantity || ''}
                   onChange={(e) =>
@@ -581,8 +750,26 @@ export function PurchaseOrders({ session }) {
                     })
                   }
                 />
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="Unit Cost"
+                  value={orderItem.unitCost || ''}
+                  onChange={(e) =>
+                    setOrderItem({
+                      ...orderItem,
+                      unitCost: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
               </div>
-              <Button onClick={handleAddItem} variant="outline" className="w-full">
+              <Button 
+                onClick={handleAddItem} 
+                variant="outline" 
+                className="w-full"
+                disabled={!orderItem.productId || orderItem.quantity <= 0 || orderItem.unitCost <= 0}
+              >
                 Add Item
               </Button>
             </div>
@@ -596,7 +783,7 @@ export function PurchaseOrders({ session }) {
                     className="flex justify-between items-center text-sm py-2 border-b last:border-b-0"
                   >
                     <span>
-                      {item.productName} x {item.quantity}
+                      {item.productName} x {item.quantity} @ ${item.unitCost?.toFixed(2) || '0.00'}
                     </span>
                     <Button
                       variant="ghost"

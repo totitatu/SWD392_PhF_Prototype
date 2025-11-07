@@ -5,9 +5,6 @@ import com.example.phfbackend.entities.sale.SaleTransaction;
 import com.example.phfbackend.repository.SaleTransactionRepository;
 import com.example.phfbackend.service.SaleTransactionService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,51 +32,51 @@ public class SaleTransactionServiceImpl implements SaleTransactionService {
     @Override
     @Transactional(readOnly = true)
     public Optional<SaleTransaction> findById(UUID id) {
-        return saleTransactionRepository.findById(id);
+        return saleTransactionRepository.findByIdWithRelations(id);
     }
     
     @Override
     @Transactional(readOnly = true)
     public Optional<SaleTransaction> findByReceiptNumber(String receiptNumber) {
-        return saleTransactionRepository.findByReceiptNumber(receiptNumber);
+        return saleTransactionRepository.findByReceiptNumberWithRelations(receiptNumber);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<SaleTransaction> findAll() {
-        return saleTransactionRepository.findAll();
+        return saleTransactionRepository.findAllWithRelations();
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<SaleTransaction> findByCashierId(UUID cashierId) {
-        return saleTransactionRepository.findByCashierId(cashierId);
+        return saleTransactionRepository.findByCashierIdWithRelations(cashierId);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<SaleTransaction> findRecentSales(int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
-        Page<SaleTransaction> page = saleTransactionRepository.findAllByOrderBySoldAtDesc(pageable);
-        return page.getContent();
+        List<SaleTransaction> all = saleTransactionRepository.findRecentSalesWithRelations();
+        return all.stream().limit(limit).toList();
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<SaleTransaction> findByDateRange(OffsetDateTime startDate, OffsetDateTime endDate) {
-        return saleTransactionRepository.findBySoldAtBetween(startDate, endDate);
+        return saleTransactionRepository.findBySoldAtBetweenWithRelations(startDate, endDate);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<SaleTransaction> search(String term) {
-        return saleTransactionRepository.searchByReceiptNumberOrCashierName(term);
+        return saleTransactionRepository.searchByReceiptNumberOrCashierNameWithRelations(term);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<SaleTransaction> filterSaleTransactions(SaleTransactionFilterCriteria criteria) {
-        Stream<SaleTransaction> stream = saleTransactionRepository.findAll().stream();
+        // Use findAllWithRelations to get all transactions with relations loaded
+        Stream<SaleTransaction> stream = saleTransactionRepository.findAllWithRelations().stream();
         
         if (criteria.getSearchTerm() != null && !criteria.getSearchTerm().trim().isEmpty()) {
             String term = criteria.getSearchTerm().trim().toLowerCase();
@@ -104,5 +101,6 @@ public class SaleTransactionServiceImpl implements SaleTransactionService {
         return stream.sorted((a, b) -> b.getSoldAt().compareTo(a.getSoldAt())).toList();
     }
 }
+
 
 

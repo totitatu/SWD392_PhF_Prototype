@@ -13,7 +13,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../ui/dialog';
-import { Plus, Mail, Phone, MapPin, Edit, Search, Filter, X } from 'lucide-react';
+import { Plus, Mail, Phone, MapPin, Edit, Search, Filter, X, Users } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export function SupplierManager({ session }) {
   const [suppliers, setSuppliers] = useState([]);
@@ -31,6 +38,7 @@ export function SupplierManager({ session }) {
     address: '',
     products: '',
     notes: '',
+    active: true,
   });
 
   useEffect(() => {
@@ -54,10 +62,33 @@ export function SupplierManager({ session }) {
 
   const handleSubmit = async () => {
     try {
+      // Validate required fields
+      if (!formData.name || !formData.name.trim()) {
+        alert('Supplier name is required');
+        return;
+      }
+      if (!formData.email || !formData.email.trim()) {
+        alert('Email is required');
+        return;
+      }
+
+      // Structure data according to backend requirements
+      const supplierData = {
+        name: formData.name.trim(),
+        contact: {
+          name: formData.name.trim(), // Contact name can be same as supplier name or a contact person name
+          email: formData.email.trim(),
+          phone: formData.phone?.trim() || null,
+          address: formData.address?.trim() || null,
+        },
+        notes: formData.notes?.trim() || null,
+        active: editingSupplier ? formData.active : true,
+      };
+
       if (editingSupplier) {
-        await supplierAPI.update(editingSupplier.id, formData);
+        await supplierAPI.update(editingSupplier.id, supplierData);
       } else {
-        await supplierAPI.create({ ...formData, active: true });
+        await supplierAPI.create(supplierData);
       }
       await fetchSuppliers();
       setShowAddDialog(false);
@@ -69,6 +100,7 @@ export function SupplierManager({ session }) {
         address: '',
         products: '',
         notes: '',
+        active: true,
       });
     } catch (error) {
       console.error('Error saving supplier:', error);
@@ -84,16 +116,16 @@ export function SupplierManager({ session }) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(supplier =>
         supplier.name?.toLowerCase().includes(term) ||
-        supplier.email?.toLowerCase().includes(term) ||
-        supplier.phone?.toLowerCase().includes(term)
+        supplier.contact?.email?.toLowerCase().includes(term) ||
+        supplier.contact?.phone?.toLowerCase().includes(term)
       );
     }
 
     // Status filter
     if (filterActive === 'active') {
-      filtered = filtered.filter(s => s.isActive !== false);
+      filtered = filtered.filter(s => s.active !== false);
     } else if (filterActive === 'inactive') {
-      filtered = filtered.filter(s => s.isActive === false);
+      filtered = filtered.filter(s => s.active === false);
     }
 
     setFilteredSuppliers(filtered);
@@ -103,11 +135,12 @@ export function SupplierManager({ session }) {
     setEditingSupplier(supplier);
     setFormData({
       name: supplier.name || '',
-      email: supplier.email || '',
-      phone: supplier.phone || '',
-      address: supplier.address || '',
-      products: supplier.products || '',
+      email: supplier.contact?.email || '',
+      phone: supplier.contact?.phone || '',
+      address: supplier.contact?.address || '',
+      products: '', // Products are not part of the supplier entity in backend
       notes: supplier.notes || '',
+      active: supplier.active !== false,
     });
     setShowAddDialog(true);
   };
@@ -121,6 +154,18 @@ export function SupplierManager({ session }) {
     } catch (error) {
       console.error('Error deactivating supplier:', error);
       alert('Error deactivating supplier: ' + (error.message || 'Unknown error'));
+    }
+  };
+
+  const handleActivate = async (supplier) => {
+    if (!confirm(`Are you sure you want to activate ${supplier.name}?`)) return;
+
+    try {
+      await supplierAPI.activate(supplier.id);
+      await fetchSuppliers();
+    } catch (error) {
+      console.error('Error activating supplier:', error);
+      alert('Error activating supplier: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -152,6 +197,7 @@ export function SupplierManager({ session }) {
               address: '',
               products: '',
               notes: '',
+              active: true,
             });
           }
         }}>
@@ -208,15 +254,6 @@ export function SupplierManager({ session }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Products Supplied</Label>
-                <Textarea
-                  value={formData.products}
-                  onChange={(e) => setFormData({ ...formData, products: e.target.value })}
-                  placeholder="Pain relievers, antibiotics, etc."
-                  rows={2}
-                />
-              </div>
-              <div className="space-y-2">
                 <Label>Notes</Label>
                 <Textarea
                   value={formData.notes}
@@ -225,6 +262,28 @@ export function SupplierManager({ session }) {
                   rows={2}
                 />
               </div>
+              {editingSupplier && (
+                <div className="space-y-2">
+                  <Label>Account Status</Label>
+                  <Select 
+                    value={formData.active ? 'active' : 'inactive'} 
+                    onValueChange={(value) => setFormData({ ...formData, active: value === 'active' })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive (Deactivated)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {formData.active 
+                      ? 'Supplier is active and can be used in purchase orders' 
+                      : 'Supplier is deactivated and cannot be used'}
+                  </p>
+                </div>
+              )}
               <Button onClick={handleSubmit} className="w-full">
                 {editingSupplier ? 'Update Supplier' : 'Add Supplier'}
               </Button>
@@ -273,52 +332,57 @@ export function SupplierManager({ session }) {
                   >
                     <Edit className="w-4 h-4" />
                   </Button>
-                  {supplier.isActive !== false && (
+                  {supplier.active !== false ? (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeactivate(supplier)}
                       className="text-destructive"
+                      title="Deactivate supplier"
                     >
                       <X className="w-4 h-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleActivate(supplier)}
+                      className="text-green-600 hover:text-green-700"
+                      title="Activate supplier"
+                    >
+                      <Users className="w-4 h-4" />
                     </Button>
                   )}
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {supplier.email && (
+              {supplier.contact?.email && (
                 <div className="flex items-center gap-2 text-sm">
                   <Mail className="w-4 h-4 text-muted-foreground" />
                   <a
-                    href={`mailto:${supplier.email}`}
+                    href={`mailto:${supplier.contact.email}`}
                     className="text-primary hover:underline"
                   >
-                    {supplier.email}
+                    {supplier.contact.email}
                   </a>
                 </div>
               )}
-              {supplier.phone && (
+              {supplier.contact?.phone && (
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="w-4 h-4 text-muted-foreground" />
                   <a
-                    href={`tel:${supplier.phone}`}
+                    href={`tel:${supplier.contact.phone}`}
                     className="text-primary hover:underline"
                   >
-                    {supplier.phone}
+                    {supplier.contact.phone}
                   </a>
                 </div>
               )}
-              {supplier.address && (
+              {supplier.contact?.address && (
                 <div className="flex items-start gap-2 text-sm">
                   <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
-                  <span className="text-muted-foreground">{supplier.address}</span>
-                </div>
-              )}
-              {supplier.products && (
-                <div className="pt-2 border-t">
-                  <p className="text-xs text-muted-foreground mb-1">Products:</p>
-                  <p className="text-sm">{supplier.products}</p>
+                  <span className="text-muted-foreground">{supplier.contact.address}</span>
                 </div>
               )}
               {supplier.notes && (

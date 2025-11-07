@@ -26,5 +26,65 @@ public interface SaleTransactionRepository extends JpaRepository<SaleTransaction
     
     @Query("SELECT s FROM SaleTransaction s WHERE s.receiptNumber LIKE %:term% OR s.cashier.fullName LIKE %:term%")
     List<SaleTransaction> searchByReceiptNumberOrCashierName(@Param("term") String term);
+    
+    // Eager load queries with JOIN FETCH
+    @Query("SELECT DISTINCT s FROM SaleTransaction s " +
+           "JOIN FETCH s.cashier " +
+           "LEFT JOIN FETCH s.lineItems line " +
+           "LEFT JOIN FETCH line.product " +
+           "LEFT JOIN FETCH line.inventoryBatch " +
+           "ORDER BY s.soldAt DESC")
+    List<SaleTransaction> findAllWithRelations();
+    
+    @Query("SELECT DISTINCT s FROM SaleTransaction s " +
+           "JOIN FETCH s.cashier " +
+           "LEFT JOIN FETCH s.lineItems line " +
+           "LEFT JOIN FETCH line.product " +
+           "LEFT JOIN FETCH line.inventoryBatch " +
+           "WHERE s.id = :id")
+    Optional<SaleTransaction> findByIdWithRelations(@Param("id") UUID id);
+    
+    @Query("SELECT DISTINCT s FROM SaleTransaction s " +
+           "JOIN FETCH s.cashier " +
+           "LEFT JOIN FETCH s.lineItems line " +
+           "LEFT JOIN FETCH line.product " +
+           "LEFT JOIN FETCH line.inventoryBatch " +
+           "WHERE s.receiptNumber = :receiptNumber")
+    Optional<SaleTransaction> findByReceiptNumberWithRelations(@Param("receiptNumber") String receiptNumber);
+    
+    @Query("SELECT DISTINCT s FROM SaleTransaction s " +
+           "JOIN FETCH s.cashier " +
+           "LEFT JOIN FETCH s.lineItems line " +
+           "LEFT JOIN FETCH line.product " +
+           "LEFT JOIN FETCH line.inventoryBatch " +
+           "WHERE s.cashier.id = :cashierId " +
+           "ORDER BY s.soldAt DESC")
+    List<SaleTransaction> findByCashierIdWithRelations(@Param("cashierId") UUID cashierId);
+    
+    @Query("SELECT DISTINCT s FROM SaleTransaction s " +
+           "JOIN FETCH s.cashier " +
+           "LEFT JOIN FETCH s.lineItems line " +
+           "LEFT JOIN FETCH line.product " +
+           "LEFT JOIN FETCH line.inventoryBatch " +
+           "WHERE s.soldAt BETWEEN :startDate AND :endDate " +
+           "ORDER BY s.soldAt DESC")
+    List<SaleTransaction> findBySoldAtBetweenWithRelations(@Param("startDate") OffsetDateTime startDate, @Param("endDate") OffsetDateTime endDate);
+    
+    @Query("SELECT DISTINCT s FROM SaleTransaction s " +
+           "JOIN FETCH s.cashier " +
+           "LEFT JOIN FETCH s.lineItems line " +
+           "LEFT JOIN FETCH line.product " +
+           "LEFT JOIN FETCH line.inventoryBatch " +
+           "WHERE s.receiptNumber LIKE CONCAT('%', :term, '%') OR s.cashier.fullName LIKE CONCAT('%', :term, '%') " +
+           "ORDER BY s.soldAt DESC")
+    List<SaleTransaction> searchByReceiptNumberOrCashierNameWithRelations(@Param("term") String term);
+    
+    @Query(value = "SELECT DISTINCT s FROM SaleTransaction s " +
+           "JOIN FETCH s.cashier " +
+           "LEFT JOIN FETCH s.lineItems line " +
+           "LEFT JOIN FETCH line.product " +
+           "LEFT JOIN FETCH line.inventoryBatch " +
+           "ORDER BY s.soldAt DESC")
+    List<SaleTransaction> findRecentSalesWithRelations();
 }
 

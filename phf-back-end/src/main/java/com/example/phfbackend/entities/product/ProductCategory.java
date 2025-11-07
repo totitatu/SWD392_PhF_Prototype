@@ -5,5 +5,6 @@ package com.example.phfbackend.entities.product;
  */
 public enum ProductCategory {
     PRESCRIPTION,
-    OVER_THE_COUNTER
+    OVER_THE_COUNTER,
+    OTHER
 }

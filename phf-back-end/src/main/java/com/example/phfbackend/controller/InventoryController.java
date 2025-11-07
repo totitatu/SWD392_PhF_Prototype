@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -26,6 +27,7 @@ public class InventoryController {
     private final ProductRepository productRepository;
     
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<List<InventoryBatchResponse>> listInventoryBatches(
             @RequestParam(required = false) String searchTerm,
             @RequestParam(required = false) UUID productId,
@@ -77,13 +79,33 @@ public class InventoryController {
     }
     
     @PutMapping("/{id}")
+    @Transactional
     public ResponseEntity<InventoryBatchResponse> updateInventoryBatch(@PathVariable UUID id, @Valid @RequestBody InventoryBatchRequest request) {
+        InventoryBatch batch = inventoryBatchService.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Inventory batch not found: " + id));
+        
+        // Verify product hasn't changed (cannot change product of existing batch)
+        if (!batch.getProduct().getId().equals(request.getProductId())) {
+            throw new IllegalStateException("Cannot change product of an existing inventory batch");
+        }
+        
+        // Create updated batch with all fields for service to process
         InventoryBatch updatedBatch = InventoryBatch.newBuilder()
+                .product(batch.getProduct())
+                .batchNumber(request.getBatchNumber())
+                .quantityOnHand(request.getQuantityOnHand())
+                .costPrice(request.getCostPrice())
+                .receivedDate(request.getReceivedDate())
+                .expiryDate(request.getExpiryDate())
                 .sellingPrice(request.getSellingPrice())
+                .active(batch.isActive())
                 .build();
         
-        InventoryBatch batch = inventoryBatchService.updateBatch(id, updatedBatch);
-        return ResponseEntity.ok(toResponse(batch));
+        inventoryBatchService.updateBatch(id, updatedBatch);
+        // Fetch the updated batch with product loaded
+        InventoryBatch updated = inventoryBatchService.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Inventory batch not found: " + id));
+        return ResponseEntity.ok(toResponse(updated));
     }
     
     @DeleteMapping("/{id}/deactivate")

@@ -118,6 +118,40 @@ public class InventoryBatch extends AuditableEntity {
         this.sellingPrice = Validation.requirePositive(sellingPrice, "sellingPrice");
     }
 
+    public void updateBatchNumber(String batchNumber) {
+        this.batchNumber = Validation.requireNonBlank(batchNumber, "batchNumber");
+    }
+
+    public void updateQuantityOnHand(int quantityOnHand) {
+        this.quantityOnHand = Validation.requirePositive(quantityOnHand, "quantityOnHand");
+    }
+
+    public void updateCostPrice(BigDecimal costPrice) {
+        this.costPrice = Validation.requirePositive(costPrice, "costPrice");
+    }
+
+    public void updateReceivedDate(LocalDate receivedDate) {
+        this.receivedDate = Validation.requireNonNull(receivedDate, "receivedDate");
+        if (this.expiryDate != null && this.expiryDate.isBefore(receivedDate)) {
+            throw new IllegalArgumentException("expiryDate must be on or after receivedDate");
+        }
+    }
+
+    public void updateExpiryDate(LocalDate expiryDate) {
+        this.expiryDate = Validation.requireNonNull(expiryDate, "expiryDate");
+        if (this.receivedDate != null && expiryDate.isBefore(this.receivedDate)) {
+            throw new IllegalArgumentException("expiryDate must be on or after receivedDate");
+        }
+    }
+
+    public void updateDates(LocalDate receivedDate, LocalDate expiryDate) {
+        this.receivedDate = Validation.requireNonNull(receivedDate, "receivedDate");
+        this.expiryDate = Validation.requireNonNull(expiryDate, "expiryDate");
+        if (expiryDate.isBefore(receivedDate)) {
+            throw new IllegalArgumentException("expiryDate must be on or after receivedDate");
+        }
+    }
+
     public void deactivate() {
         this.active = false;
     }

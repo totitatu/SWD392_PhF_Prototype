@@ -33,7 +33,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional(readOnly = true)
     public Optional<PurchaseOrder> findById(UUID id) {
-        return purchaseOrderRepository.findById(id);
+        return purchaseOrderRepository.findByIdWithRelations(id);
     }
     
     @Override
@@ -45,7 +45,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<PurchaseOrder> findAll() {
-        return purchaseOrderRepository.findAll();
+        return purchaseOrderRepository.findAllWithRelations();
     }
     
     @Override
@@ -69,7 +69,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<PurchaseOrder> filterPurchaseOrders(PurchaseOrderFilterCriteria criteria) {
-        Stream<PurchaseOrder> stream = purchaseOrderRepository.findAll().stream();
+        Stream<PurchaseOrder> stream = purchaseOrderRepository.findAllWithRelations().stream();
         
         if (criteria.getSearchTerm() != null && !criteria.getSearchTerm().trim().isEmpty()) {
             String term = criteria.getSearchTerm().trim().toLowerCase();
@@ -126,6 +126,41 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
     
     @Override
+    public PurchaseOrder updateStatus(UUID id, PurchaseOrderStatus status) {
+        PurchaseOrder order = purchaseOrderRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Purchase order not found: " + id));
+        
+        // Use appropriate method based on status
+        switch (status) {
+            case DRAFT:
+                // Can't revert to draft, but allow if already draft
+                if (order.getStatus() != PurchaseOrderStatus.DRAFT) {
+                    throw new IllegalStateException("Cannot change status to DRAFT");
+                }
+                break;
+            case ORDERED:
+                if (order.getStatus() == PurchaseOrderStatus.DRAFT) {
+                    order.markOrdered(null);
+                } else {
+                    throw new IllegalStateException("Can only mark DRAFT orders as ORDERED");
+                }
+                break;
+            case RECEIVED:
+                if (order.getStatus() == PurchaseOrderStatus.ORDERED) {
+                    order.markReceived();
+                } else {
+                    throw new IllegalStateException("Can only mark ORDERED orders as RECEIVED");
+                }
+                break;
+            case CANCELLED:
+                order.cancel();
+                break;
+        }
+        
+        return purchaseOrderRepository.save(order);
+    }
+    
+    @Override
     public void deletePurchaseOrder(UUID id) {
         PurchaseOrder order = purchaseOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Purchase order not found: " + id));
@@ -135,5 +170,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         purchaseOrderRepository.delete(order);
     }
 }
+
 
 

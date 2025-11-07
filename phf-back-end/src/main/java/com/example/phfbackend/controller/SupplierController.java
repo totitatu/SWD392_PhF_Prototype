@@ -4,6 +4,7 @@ import com.example.phfbackend.dto.SupplierFilterCriteria;
 import com.example.phfbackend.dto.request.SupplierRequest;
 import com.example.phfbackend.dto.response.SupplierResponse;
 import com.example.phfbackend.entities.supplier.Supplier;
+import com.example.phfbackend.repository.SupplierRepository;
 import com.example.phfbackend.service.SupplierService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 public class SupplierController {
     
     private final SupplierService supplierService;
+    private final SupplierRepository supplierRepository;
     
     @GetMapping
     public ResponseEntity<List<SupplierResponse>> listSuppliers(
@@ -66,20 +68,37 @@ public class SupplierController {
     
     @PutMapping("/{id}")
     public ResponseEntity<SupplierResponse> updateSupplier(@PathVariable UUID id, @Valid @RequestBody SupplierRequest request) {
-        Supplier updatedSupplier = Supplier.newBuilder()
-                .name(request.getName())
-                .contact(request.getContact())
-                .notes(request.getNotes())
-                .active(request.getActive())
-                .build();
+        Supplier supplier = supplierRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Supplier not found: " + id));
         
-        Supplier supplier = supplierService.updateSupplier(id, updatedSupplier);
-        return ResponseEntity.ok(toResponse(supplier));
+        supplier.updateName(request.getName());
+        supplier.updateContact(request.getContact());
+        if (request.getNotes() != null) {
+            supplier.updateNotes(request.getNotes());
+        }
+        
+        // Update active status
+        if (request.getActive() != null) {
+            if (request.getActive()) {
+                supplier.activate();
+            } else {
+                supplier.deactivate();
+            }
+        }
+        
+        Supplier updated = supplierRepository.save(supplier);
+        return ResponseEntity.ok(toResponse(updated));
     }
     
     @DeleteMapping("/{id}/deactivate")
     public ResponseEntity<Void> deactivateSupplier(@PathVariable UUID id) {
         supplierService.deactivateSupplier(id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    @PutMapping("/{id}/activate")
+    public ResponseEntity<Void> activateSupplier(@PathVariable UUID id) {
+        supplierService.activateSupplier(id);
         return ResponseEntity.noContent().build();
     }
     
@@ -95,5 +114,6 @@ public class SupplierController {
                 .build();
     }
 }
+
 
 

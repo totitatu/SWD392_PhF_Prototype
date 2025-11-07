@@ -26,3 +26,4 @@ public interface SystemLogRepository extends JpaRepository<SystemLog, UUID> {
 }
 
 
+

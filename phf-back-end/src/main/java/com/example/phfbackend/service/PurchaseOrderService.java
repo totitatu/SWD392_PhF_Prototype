@@ -32,5 +32,7 @@ public interface PurchaseOrderService {
     
     PurchaseOrder cancelOrder(UUID id);
     
+    PurchaseOrder updateStatus(UUID id, PurchaseOrderStatus status);
+    
     void deletePurchaseOrder(UUID id);
 }

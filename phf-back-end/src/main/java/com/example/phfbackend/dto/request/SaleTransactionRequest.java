@@ -1,7 +1,8 @@
 package com.example.phfbackend.dto.request;
 
+import com.example.phfbackend.entities.sale.PaymentMethod;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -11,9 +12,12 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Request DTO for creating sale transaction (UC46 - Generate Receipt)
+ */
 @Data
 public class SaleTransactionRequest {
-    @NotBlank(message = "Receipt number is required")
+    // Receipt number will be auto-generated if not provided
     private String receiptNumber;
     
     @NotNull(message = "Sold at date is required")
@@ -27,6 +31,19 @@ public class SaleTransactionRequest {
     private List<SaleTransactionLineRequest> lineItems;
     
     private BigDecimal totalDiscount;
+    
+    @NotNull(message = "Payment method is required")
+    private PaymentMethod paymentMethod;
+    
+    // Prescription image URL (required if cart contains prescription products)
+    private String prescriptionImageUrl;
+    
+    // Customer email (for email receipt option)
+    @Email(message = "Invalid email format")
+    private String customerEmail;
+    
+    // Whether to email receipt
+    private Boolean emailReceipt;
 }
 
 

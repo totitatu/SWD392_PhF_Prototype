@@ -6,6 +6,8 @@ import com.example.phfbackend.entities.user.PharmacyUser;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -60,6 +62,16 @@ public class SaleTransaction extends AuditableEntity {
     @Column(name = "total_discount", precision = 10, scale = 2)
     private BigDecimal totalDiscount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 32)
+    private PaymentMethod paymentMethod;
+
+    @Column(name = "prescription_image_url", columnDefinition = "TEXT")
+    private String prescriptionImageUrl;
+
+    @Column(name = "customer_email", length = 128)
+    private String customerEmail;
+
     @OneToMany(mappedBy = "saleTransaction", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("lineNumber ASC")
     private List<SaleTransactionLine> lineItems = new ArrayList<>();
@@ -70,12 +82,18 @@ public class SaleTransaction extends AuditableEntity {
                             OffsetDateTime soldAt,
                             PharmacyUser cashier,
                             BigDecimal totalDiscount,
+                            PaymentMethod paymentMethod,
+                            String prescriptionImageUrl,
+                            String customerEmail,
                             List<SaleTransactionLine> lineItems) {
         this.id = id;
         this.receiptNumber = Validation.requireNonBlank(receiptNumber, "receiptNumber");
         this.soldAt = Validation.requireNonNull(soldAt, "soldAt");
         this.cashier = Validation.requireNonNull(cashier, "cashier");
         this.totalDiscount = totalDiscount;
+        this.paymentMethod = paymentMethod;
+        this.prescriptionImageUrl = prescriptionImageUrl;
+        this.customerEmail = customerEmail;
         if (lineItems != null) {
             lineItems.forEach(this::addLine);
         }

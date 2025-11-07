@@ -56,7 +56,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public List<Product> search(String term) {
-        return productRepository.searchBySkuOrName(term);
+        return productRepository.searchBySkuOrNameOrIngredient(term);
     }
     
     @Override
@@ -126,5 +126,6 @@ public class ProductServiceImpl implements ProductService {
         productRepository.deleteById(id);
     }
 }
+
 
 

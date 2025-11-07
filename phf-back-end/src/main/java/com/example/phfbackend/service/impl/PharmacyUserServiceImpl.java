@@ -98,6 +98,14 @@ public class PharmacyUserServiceImpl implements PharmacyUserService {
         if (updatedUser.getPasswordHash() != null && !updatedUser.getPasswordHash().isEmpty()) {
             user.updatePassword(updatedUser.getPasswordHash());
         }
+        // Update active status
+        if (updatedUser.isActive() != user.isActive()) {
+            if (updatedUser.isActive()) {
+                user.activate();
+            } else {
+                user.deactivate();
+            }
+        }
         return userRepository.save(user);
     }
     
@@ -122,5 +130,6 @@ public class PharmacyUserServiceImpl implements PharmacyUserService {
         userRepository.deleteById(id);
     }
 }
+
 
 

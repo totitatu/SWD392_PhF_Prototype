@@ -14,19 +14,29 @@ import java.util.UUID;
 
 @Repository
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UUID> {
-    Optional<PurchaseOrder> findByOrderCode(String orderCode);
+    @Query("SELECT DISTINCT po FROM PurchaseOrder po JOIN FETCH po.supplier LEFT JOIN FETCH po.lineItems line LEFT JOIN FETCH line.product WHERE po.orderCode = :orderCode")
+    Optional<PurchaseOrder> findByOrderCode(@Param("orderCode") String orderCode);
     
-    List<PurchaseOrder> findByStatus(PurchaseOrderStatus status);
+    @Query("SELECT DISTINCT po FROM PurchaseOrder po JOIN FETCH po.supplier LEFT JOIN FETCH po.lineItems line LEFT JOIN FETCH line.product WHERE po.status = :status")
+    List<PurchaseOrder> findByStatus(@Param("status") PurchaseOrderStatus status);
     
-    List<PurchaseOrder> findBySupplierId(UUID supplierId);
+    @Query("SELECT DISTINCT po FROM PurchaseOrder po JOIN FETCH po.supplier LEFT JOIN FETCH po.lineItems line LEFT JOIN FETCH line.product WHERE po.supplier.id = :supplierId")
+    List<PurchaseOrder> findBySupplierId(@Param("supplierId") UUID supplierId);
     
-    @Query("SELECT po FROM PurchaseOrder po WHERE po.orderDate BETWEEN :startDate AND :endDate")
+    @Query("SELECT DISTINCT po FROM PurchaseOrder po JOIN FETCH po.supplier LEFT JOIN FETCH po.lineItems line LEFT JOIN FETCH line.product WHERE po.orderDate BETWEEN :startDate AND :endDate")
     List<PurchaseOrder> findByOrderDateBetween(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
     
-    @Query("SELECT po FROM PurchaseOrder po WHERE po.supplier.name LIKE %:term% OR po.orderCode LIKE %:term%")
+    @Query("SELECT DISTINCT po FROM PurchaseOrder po JOIN FETCH po.supplier LEFT JOIN FETCH po.lineItems line LEFT JOIN FETCH line.product WHERE po.supplier.name LIKE CONCAT('%', :term, '%') OR po.orderCode LIKE CONCAT('%', :term, '%')")
     List<PurchaseOrder> searchBySupplierNameOrOrderCode(@Param("term") String term);
     
-    List<PurchaseOrder> findByStatusOrderByOrderDateDesc(PurchaseOrderStatus status);
+    @Query("SELECT DISTINCT po FROM PurchaseOrder po JOIN FETCH po.supplier LEFT JOIN FETCH po.lineItems line LEFT JOIN FETCH line.product WHERE po.status = :status ORDER BY po.orderDate DESC")
+    List<PurchaseOrder> findByStatusOrderByOrderDateDesc(@Param("status") PurchaseOrderStatus status);
+    
+    @Query("SELECT DISTINCT po FROM PurchaseOrder po JOIN FETCH po.supplier LEFT JOIN FETCH po.lineItems line LEFT JOIN FETCH line.product")
+    List<PurchaseOrder> findAllWithRelations();
+    
+    @Query("SELECT DISTINCT po FROM PurchaseOrder po JOIN FETCH po.supplier LEFT JOIN FETCH po.lineItems line LEFT JOIN FETCH line.product WHERE po.id = :id")
+    Optional<PurchaseOrder> findByIdWithRelations(@Param("id") UUID id);
 }
 
 
