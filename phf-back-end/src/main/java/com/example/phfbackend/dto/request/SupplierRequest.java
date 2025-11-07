@@ -1,4 +1,4 @@
-package com.example.phfbackend.dto;
+package com.example.phfbackend.dto.request;
 
 import com.example.phfbackend.entities.supplier.ContactInfo;
 import jakarta.validation.Valid;

@@ -1,6 +1,6 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.GeminiRequest;
+import com.example.phfbackend.dto.request.GeminiRequest;
 import com.example.phfbackend.dto.GeminiResponse;
 import com.example.phfbackend.service.GeminiService;
 import jakarta.validation.Valid;

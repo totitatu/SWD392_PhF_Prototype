@@ -1,4 +1,4 @@
-package com.example.phfbackend.dto;
+package com.example.phfbackend.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;

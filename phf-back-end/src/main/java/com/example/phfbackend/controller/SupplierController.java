@@ -1,8 +1,8 @@
 package com.example.phfbackend.controller;
 
 import com.example.phfbackend.dto.SupplierFilterCriteria;
-import com.example.phfbackend.dto.SupplierRequest;
-import com.example.phfbackend.dto.SupplierResponse;
+import com.example.phfbackend.dto.request.SupplierRequest;
+import com.example.phfbackend.dto.response.SupplierResponse;
 import com.example.phfbackend.entities.supplier.Supplier;
 import com.example.phfbackend.service.SupplierService;
 import jakarta.validation.Valid;

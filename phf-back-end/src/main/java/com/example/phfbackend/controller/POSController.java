@@ -1,6 +1,6 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.ProductResponse;
+import com.example.phfbackend.dto.response.ProductResponse;
 import com.example.phfbackend.entities.product.Product;
 import com.example.phfbackend.service.ProductService;
 import lombok.RequiredArgsConstructor;

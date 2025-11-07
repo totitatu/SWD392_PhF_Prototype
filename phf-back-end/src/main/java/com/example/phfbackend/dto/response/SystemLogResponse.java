@@ -1,4 +1,4 @@
-package com.example.phfbackend.dto;
+package com.example.phfbackend.dto.response;
 
 import lombok.Builder;
 import lombok.Data;

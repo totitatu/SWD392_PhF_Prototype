@@ -1,8 +1,8 @@
 package com.example.phfbackend.controller;
 
 import com.example.phfbackend.dto.UserFilterCriteria;
-import com.example.phfbackend.dto.UserRequest;
-import com.example.phfbackend.dto.UserResponse;
+import com.example.phfbackend.dto.request.UserRequest;
+import com.example.phfbackend.dto.response.UserResponse;
 import com.example.phfbackend.entities.user.PharmacyUser;
 import com.example.phfbackend.entities.user.UserRole;
 import com.example.phfbackend.service.PharmacyUserService;

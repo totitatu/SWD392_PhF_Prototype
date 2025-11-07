@@ -1,6 +1,6 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.SystemLogResponse;
+import com.example.phfbackend.dto.response.SystemLogResponse;
 import com.example.phfbackend.entities.shared.SystemLog;
 import com.example.phfbackend.service.SystemLogService;
 import lombok.RequiredArgsConstructor;

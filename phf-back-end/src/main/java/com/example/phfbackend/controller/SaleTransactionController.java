@@ -1,10 +1,10 @@
 package com.example.phfbackend.controller;
 
 import com.example.phfbackend.dto.SaleTransactionFilterCriteria;
-import com.example.phfbackend.dto.SaleTransactionLineRequest;
-import com.example.phfbackend.dto.SaleTransactionLineResponse;
-import com.example.phfbackend.dto.SaleTransactionRequest;
-import com.example.phfbackend.dto.SaleTransactionResponse;
+import com.example.phfbackend.dto.request.SaleTransactionLineRequest;
+import com.example.phfbackend.dto.response.SaleTransactionLineResponse;
+import com.example.phfbackend.dto.request.SaleTransactionRequest;
+import com.example.phfbackend.dto.response.SaleTransactionResponse;
 import com.example.phfbackend.entities.sale.SaleTransaction;
 import com.example.phfbackend.entities.sale.SaleTransactionLine;
 import com.example.phfbackend.repository.InventoryBatchRepository;

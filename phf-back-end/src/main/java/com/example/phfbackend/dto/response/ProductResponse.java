@@ -1,4 +1,4 @@
-package com.example.phfbackend.dto;
+package com.example.phfbackend.dto.response;
 
 import com.example.phfbackend.entities.product.ProductCategory;
 import lombok.Builder;

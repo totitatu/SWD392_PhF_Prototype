@@ -1,7 +1,7 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.RegistrationRequest;
-import com.example.phfbackend.dto.UserResponse;
+import com.example.phfbackend.dto.request.RegistrationRequest;
+import com.example.phfbackend.dto.response.UserResponse;
 import com.example.phfbackend.entities.user.PharmacyUser;
 import com.example.phfbackend.service.PharmacyUserService;
 import jakarta.validation.Valid;

@@ -1,4 +1,4 @@
-package com.example.phfbackend.dto;
+package com.example.phfbackend.dto.request;
 
 import com.example.phfbackend.entities.product.ProductCategory;
 import jakarta.validation.constraints.NotBlank;

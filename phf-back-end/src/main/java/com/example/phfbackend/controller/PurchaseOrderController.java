@@ -1,12 +1,12 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.GeminiRequest;
+import com.example.phfbackend.dto.request.GeminiRequest;
 import com.example.phfbackend.dto.GeminiResponse;
 import com.example.phfbackend.dto.PurchaseOrderFilterCriteria;
-import com.example.phfbackend.dto.PurchaseOrderLineRequest;
-import com.example.phfbackend.dto.PurchaseOrderLineResponse;
-import com.example.phfbackend.dto.PurchaseOrderRequest;
-import com.example.phfbackend.dto.PurchaseOrderResponse;
+import com.example.phfbackend.dto.request.PurchaseOrderLineRequest;
+import com.example.phfbackend.dto.response.PurchaseOrderLineResponse;
+import com.example.phfbackend.dto.request.PurchaseOrderRequest;
+import com.example.phfbackend.dto.response.PurchaseOrderResponse;
 import com.example.phfbackend.entities.purchase.PurchaseOrder;
 import com.example.phfbackend.entities.purchase.PurchaseOrderLine;
 import com.example.phfbackend.entities.purchase.PurchaseOrderStatus;

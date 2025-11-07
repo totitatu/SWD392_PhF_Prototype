@@ -1,7 +1,7 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.InventoryBatchRequest;
-import com.example.phfbackend.dto.InventoryBatchResponse;
+import com.example.phfbackend.dto.request.InventoryBatchRequest;
+import com.example.phfbackend.dto.response.InventoryBatchResponse;
 import com.example.phfbackend.dto.InventoryFilterCriteria;
 import com.example.phfbackend.entities.inventory.InventoryBatch;
 import com.example.phfbackend.repository.ProductRepository;
