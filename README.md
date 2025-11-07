@@ -473,11 +473,11 @@ npm run lint
 
 ## 📄 License
 
-[Thêm thông tin license nếu có]
+
 
 ## 👥 Contributors
 
-[Thêm danh sách contributors nếu có]
+daoohoangg
 
 ## 📞 Support
 
