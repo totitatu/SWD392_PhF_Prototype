@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { projectId } from '../../utils/supabase/info';
+import { productAPI, inventoryAPI } from '../../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -70,22 +70,13 @@ export function InventoryManager({ session }) {
 
   const fetchData = async () => {
     try {
-      const token = session.access_token;
-
-      const [productsRes, inventoryRes] = await Promise.all([
-        fetch(`https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/products`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
-        fetch(`https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/inventory`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
+      const [productsData, inventoryData] = await Promise.all([
+        productAPI.list({ active: true }),
+        inventoryAPI.list({ active: true }),
       ]);
 
-      const productsData = await productsRes.json();
-      const inventoryData = await inventoryRes.json();
-
-      setProducts(productsData.products || []);
-      setInventory(inventoryData.inventory || []);
+      setProducts(productsData || []);
+      setInventory(inventoryData || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -95,65 +86,56 @@ export function InventoryManager({ session }) {
 
   const handleAddProduct = async () => {
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/products`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(newProduct),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-        setShowAddProduct(false);
-        setNewProduct({
-          name: '',
-          activeIngredient: '',
-          dosage: '',
-          sku: '',
-          category: '',
-          minStock: 10,
-        });
-      }
+      await productAPI.create({
+        name: newProduct.name,
+        activeIngredient: newProduct.activeIngredient,
+        dosageForm: newProduct.dosage || 'TABLET',
+        dosageStrength: newProduct.dosage,
+        sku: newProduct.sku,
+        category: newProduct.category || 'OTHER',
+        minStock: newProduct.minStock,
+        active: true,
+      });
+      await fetchData();
+      setShowAddProduct(false);
+      setNewProduct({
+        name: '',
+        activeIngredient: '',
+        dosage: '',
+        sku: '',
+        category: '',
+        minStock: 10,
+      });
     } catch (error) {
       console.error('Error adding product:', error);
+      alert('Error adding product: ' + (error.message || 'Unknown error'));
     }
   };
 
   const handleAddStock = async () => {
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/inventory`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(newStock),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-        setShowAddStock(false);
-        setNewStock({
-          productId: '',
-          batchNumber: '',
-          quantity: 0,
-          costPrice: 0,
-          sellingPrice: 0,
-          expiryDate: '',
-        });
-      }
+      await inventoryAPI.create({
+        productId: newStock.productId,
+        batchNumber: newStock.batchNumber,
+        quantity: newStock.quantity,
+        costPrice: newStock.costPrice,
+        sellingPrice: newStock.sellingPrice,
+        expiryDate: newStock.expiryDate || null,
+        active: true,
+      });
+      await fetchData();
+      setShowAddStock(false);
+      setNewStock({
+        productId: '',
+        batchNumber: '',
+        quantity: 0,
+        costPrice: 0,
+        sellingPrice: 0,
+        expiryDate: '',
+      });
     } catch (error) {
       console.error('Error adding stock:', error);
+      alert('Error adding stock: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -215,34 +197,29 @@ export function InventoryManager({ session }) {
 
   const handleUpdateProduct = async () => {
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/products/${editingProduct.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(newProduct),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-        setShowEditProduct(false);
-        setEditingProduct(null);
-        setNewProduct({
-          name: '',
-          activeIngredient: '',
-          dosage: '',
-          sku: '',
-          category: '',
-          minStock: 10,
-        });
-      }
+      await productAPI.update(editingProduct.id, {
+        name: newProduct.name,
+        activeIngredient: newProduct.activeIngredient,
+        dosageForm: newProduct.dosage || 'TABLET',
+        dosageStrength: newProduct.dosage,
+        sku: newProduct.sku,
+        category: newProduct.category || 'OTHER',
+        minStock: newProduct.minStock,
+      });
+      await fetchData();
+      setShowEditProduct(false);
+      setEditingProduct(null);
+      setNewProduct({
+        name: '',
+        activeIngredient: '',
+        dosage: '',
+        sku: '',
+        category: '',
+        minStock: 10,
+      });
     } catch (error) {
       console.error('Error updating product:', error);
+      alert('Error updating product: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -250,24 +227,11 @@ export function InventoryManager({ session }) {
     if (!confirm(`Are you sure you want to deactivate ${product.name}?`)) return;
 
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/products/${product.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isActive: false }),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-      }
+      await productAPI.deactivate(product.id);
+      await fetchData();
     } catch (error) {
       console.error('Error deactivating product:', error);
+      alert('Error deactivating product: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -317,34 +281,28 @@ export function InventoryManager({ session }) {
 
   const handleUpdateInventory = async () => {
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/inventory/${editingInventory.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(newStock),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-        setShowEditInventory(false);
-        setEditingInventory(null);
-        setNewStock({
-          productId: '',
-          batchNumber: '',
-          quantity: 0,
-          costPrice: 0,
-          sellingPrice: 0,
-          expiryDate: '',
-        });
-      }
+      await inventoryAPI.update(editingInventory.id, {
+        productId: newStock.productId,
+        batchNumber: newStock.batchNumber,
+        quantity: newStock.quantity,
+        costPrice: newStock.costPrice,
+        sellingPrice: newStock.sellingPrice,
+        expiryDate: newStock.expiryDate || null,
+      });
+      await fetchData();
+      setShowEditInventory(false);
+      setEditingInventory(null);
+      setNewStock({
+        productId: '',
+        batchNumber: '',
+        quantity: 0,
+        costPrice: 0,
+        sellingPrice: 0,
+        expiryDate: '',
+      });
     } catch (error) {
       console.error('Error updating inventory:', error);
+      alert('Error updating inventory: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -353,24 +311,11 @@ export function InventoryManager({ session }) {
     if (!confirm(`Are you sure you want to deactivate this inventory item for ${product?.name || 'product'}?`)) return;
 
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/inventory/${item.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isActive: false }),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-      }
+      await inventoryAPI.deactivate(item.id);
+      await fetchData();
     } catch (error) {
       console.error('Error deactivating inventory:', error);
+      alert('Error deactivating inventory: ' + (error.message || 'Unknown error'));
     }
   };
 

@@ -9,6 +9,7 @@ import { PurchaseOrders } from './components/orders/PurchaseOrders';
 import { ReportsPage } from './components/reports/ReportsPage';
 import { UserManagement } from './components/settings/UserManagement';
 import { Sidebar } from './components/layout/Sidebar';
+import { GeminiChat } from './components/chat/GeminiChat';
 import { createClient } from '@supabase/supabase-js';
 import { projectId, publicAnonKey } from './utils/supabase/info';
 
@@ -95,6 +96,7 @@ export default function App() {
           {renderPage()}
         </div>
       </div>
+      <GeminiChat session={session} />
     </div>
   );
 }

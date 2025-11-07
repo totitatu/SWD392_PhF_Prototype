@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { projectId } from '../../utils/supabase/info';
+import { purchaseOrderAPI, supplierAPI, productAPI } from '../../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -60,7 +60,7 @@ export function PurchaseOrders({ session }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     filterOrders();
@@ -68,27 +68,15 @@ export function PurchaseOrders({ session }) {
 
   const fetchData = async () => {
     try {
-      const token = session.access_token;
-
-      const [ordersRes, suppliersRes, productsRes] = await Promise.all([
-        fetch(`https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/purchase-orders`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
-        fetch(`https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/suppliers`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
-        fetch(`https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/products`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
+      const [ordersData, suppliersData, productsData] = await Promise.all([
+        purchaseOrderAPI.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
+        supplierAPI.list({ active: true }),
+        productAPI.list({ active: true }),
       ]);
 
-      const ordersData = await ordersRes.json();
-      const suppliersData = await suppliersRes.json();
-      const productsData = await productsRes.json();
-
-      setOrders(ordersData.orders || []);
-      setSuppliers(suppliersData.suppliers || []);
-      setProducts(productsData.products || []);
+      setOrders(ordersData || []);
+      setSuppliers(suppliersData || []);
+      setProducts(productsData || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -157,34 +145,25 @@ export function PurchaseOrders({ session }) {
     if (!newOrder.supplierId || newOrder.items.length === 0) return;
 
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/purchase-orders`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            ...newOrder,
-            totalAmount: 0, // Can be calculated based on cost prices
-          }),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-        setShowCreateDialog(false);
-        setNewOrder({
-          supplierId: '',
-          supplierName: '',
-          supplierEmail: '',
-          items: [],
-        });
-      }
+      await purchaseOrderAPI.create({
+        supplierId: newOrder.supplierId,
+        lineItems: newOrder.items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitCost: 0, // Can be calculated based on cost prices
+        })),
+      });
+      await fetchData();
+      setShowCreateDialog(false);
+      setNewOrder({
+        supplierId: '',
+        supplierName: '',
+        supplierEmail: '',
+        items: [],
+      });
     } catch (error) {
       console.error('Error creating order:', error);
+      alert('Error creating order: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -207,32 +186,26 @@ export function PurchaseOrders({ session }) {
 
   const handleUpdateDraft = async () => {
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/purchase-orders/${editingOrder.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(newOrder),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-        setShowEditDialog(false);
-        setEditingOrder(null);
-        setNewOrder({
-          supplierId: '',
-          supplierName: '',
-          supplierEmail: '',
-          items: [],
-        });
-      }
+      await purchaseOrderAPI.update(editingOrder.id, {
+        supplierId: newOrder.supplierId,
+        lineItems: newOrder.items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitCost: 0,
+        })),
+      });
+      await fetchData();
+      setShowEditDialog(false);
+      setEditingOrder(null);
+      setNewOrder({
+        supplierId: '',
+        supplierName: '',
+        supplierEmail: '',
+        items: [],
+      });
     } catch (error) {
       console.error('Error updating draft order:', error);
+      alert('Error updating order: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -240,45 +213,25 @@ export function PurchaseOrders({ session }) {
     if (!confirm('Are you sure you want to delete this draft order?')) return;
 
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/purchase-orders/${orderId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
-      }
+      await purchaseOrderAPI.delete(orderId);
+      await fetchData();
     } catch (error) {
       console.error('Error deleting draft order:', error);
+      alert('Error deleting order: ' + (error.message || 'Unknown error'));
     }
   };
 
   const handleUpdateStatus = async (orderId, status) => {
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/purchase-orders/${orderId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status }),
-        }
-      );
-
-      if (response.ok) {
-        await fetchData();
+      if (status === 'ordered') {
+        await purchaseOrderAPI.send(orderId);
+      } else {
+        await purchaseOrderAPI.update(orderId, { status });
       }
+      await fetchData();
     } catch (error) {
       console.error('Error updating order status:', error);
+      alert('Error updating order status: ' + (error.message || 'Unknown error'));
     }
   };
 

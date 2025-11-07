@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { projectId } from '../../utils/supabase/info';
+import { supplierAPI } from '../../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -35,7 +35,7 @@ export function SupplierManager({ session }) {
 
   useEffect(() => {
     fetchSuppliers();
-  }, []);
+  }, [filterActive]);
 
   useEffect(() => {
     filterSuppliers();
@@ -43,16 +43,8 @@ export function SupplierManager({ session }) {
 
   const fetchSuppliers = async () => {
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/suppliers`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
-      );
-
-      const data = await response.json();
-      setSuppliers(data.suppliers || []);
+      const data = await supplierAPI.list({ active: filterActive === 'all' ? undefined : filterActive === 'active' });
+      setSuppliers(data || []);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
     } finally {
@@ -62,35 +54,25 @@ export function SupplierManager({ session }) {
 
   const handleSubmit = async () => {
     try {
-      const token = session.access_token;
-      const url = editingSupplier
-        ? `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/suppliers/${editingSupplier.id}`
-        : `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/suppliers`;
-
-      const response = await fetch(url, {
-        method: editingSupplier ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        await fetchSuppliers();
-        setShowAddDialog(false);
-        setEditingSupplier(null);
-        setFormData({
-          name: '',
-          email: '',
-          phone: '',
-          address: '',
-          products: '',
-          notes: '',
-        });
+      if (editingSupplier) {
+        await supplierAPI.update(editingSupplier.id, formData);
+      } else {
+        await supplierAPI.create({ ...formData, active: true });
       }
+      await fetchSuppliers();
+      setShowAddDialog(false);
+      setEditingSupplier(null);
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        address: '',
+        products: '',
+        notes: '',
+      });
     } catch (error) {
       console.error('Error saving supplier:', error);
+      alert('Error saving supplier: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -134,24 +116,11 @@ export function SupplierManager({ session }) {
     if (!confirm(`Are you sure you want to deactivate ${supplier.name}?`)) return;
 
     try {
-      const token = session.access_token;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/suppliers/${supplier.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isActive: false }),
-        }
-      );
-
-      if (response.ok) {
-        await fetchSuppliers();
-      }
+      await supplierAPI.deactivate(supplier.id);
+      await fetchSuppliers();
     } catch (error) {
       console.error('Error deactivating supplier:', error);
+      alert('Error deactivating supplier: ' + (error.message || 'Unknown error'));
     }
   };
 

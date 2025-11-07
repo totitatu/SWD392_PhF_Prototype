@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { projectId } from '../utils/supabase/info';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { 
@@ -11,6 +10,7 @@ import {
   TrendingDown
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { saleAPI, inventoryAPI } from '../services/api';
 
 export function Dashboard({ session }) {
   const [stats, setStats] = useState({
@@ -29,58 +29,73 @@ export function Dashboard({ session }) {
 
   const fetchDashboardData = async () => {
     try {
-      const token = session.access_token;
-
-      // Fetch alerts
-      const alertsRes = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/alerts`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
-      );
-      const alertsData = await alertsRes.json();
-      setAlerts(alertsData.alerts || []);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
       // Fetch sales for today
-      const salesRes = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/sales`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
-      );
-      const salesData = await salesRes.json();
-      const sales = salesData.sales || [];
+      const sales = await saleAPI.list({
+        startDate: today.toISOString(),
+        endDate: tomorrow.toISOString(),
+      });
 
-      const today = new Date().toDateString();
-      const todaySales = sales.filter((sale) => 
-        new Date(sale.createdAt).toDateString() === today
-      );
-
-      const todayRevenue = todaySales.reduce((sum, sale) => 
+      const todayRevenue = sales.reduce((sum, sale) => 
         sum + (sale.totalAmount || 0), 0
       );
 
       // Fetch inventory
-      const invRes = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-a836deb0/inventory`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
-      );
-      const invData = await invRes.json();
-      const inventory = invData.inventory || [];
+      const inventory = await inventoryAPI.list({ active: true });
 
       const totalValue = inventory.reduce((sum, item) => 
         sum + ((item.quantity || 0) * (item.costPrice || 0)), 0
       );
 
+      // Calculate low stock and expiring items
+      const lowStockCount = inventory.filter(item => {
+        // This would need product info to check minStock
+        // For now, using a simple threshold
+        return item.quantity <= 10;
+      }).length;
+
+      const expiringCount = inventory.filter(item => {
+        if (!item.expiryDate) return false;
+        const expiryDate = new Date(item.expiryDate);
+        const daysUntilExpiry = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
+        return daysUntilExpiry <= 90 && daysUntilExpiry > 0;
+      }).length;
+
       setStats({
         todaySales: todayRevenue,
-        todayTransactions: todaySales.length,
-        lowStockCount: alertsData.alerts?.filter((a) => a.type === 'low-stock').length || 0,
-        expiringCount: alertsData.alerts?.filter((a) => a.type === 'expiry').length || 0,
+        todayTransactions: sales.length,
+        lowStockCount,
+        expiringCount,
         totalInventoryValue: totalValue,
       });
+
+      // Generate alerts from inventory
+      const alerts = [];
+      inventory.forEach(item => {
+        if (item.quantity <= 10) {
+          alerts.push({
+            type: 'low-stock',
+            severity: item.quantity === 0 ? 'critical' : 'warning',
+            message: `Low stock: ${item.productName || 'Product'} - ${item.quantity} remaining`,
+          });
+        }
+        if (item.expiryDate) {
+          const expiryDate = new Date(item.expiryDate);
+          const daysUntilExpiry = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
+          if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
+            alerts.push({
+              type: 'expiry',
+              severity: daysUntilExpiry <= 7 ? 'critical' : 'warning',
+              message: `Expiring soon: ${item.productName || 'Product'} - ${daysUntilExpiry} days left`,
+            });
+          }
+        }
+      });
+      setAlerts(alerts);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {

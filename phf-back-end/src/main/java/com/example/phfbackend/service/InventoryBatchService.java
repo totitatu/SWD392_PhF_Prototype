@@ -1,70 +1,39 @@
 package com.example.phfbackend.service;
 
+import com.example.phfbackend.dto.InventoryFilterCriteria;
 import com.example.phfbackend.entities.inventory.InventoryBatch;
-import com.example.phfbackend.repository.InventoryBatchRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-@Service
-@RequiredArgsConstructor
-@Transactional
-public class InventoryBatchService {
+public interface InventoryBatchService {
+    InventoryBatch createBatch(InventoryBatch batch);
     
-    private final InventoryBatchRepository inventoryBatchRepository;
+    Optional<InventoryBatch> findById(UUID id);
     
-    public InventoryBatch createBatch(InventoryBatch batch) {
-        return inventoryBatchRepository.save(batch);
-    }
+    List<InventoryBatch> findByProductId(UUID productId);
     
-    @Transactional(readOnly = true)
-    public Optional<InventoryBatch> findById(UUID id) {
-        return inventoryBatchRepository.findById(id);
-    }
+    List<InventoryBatch> findAvailableBatchesByProductOrderByExpiry(UUID productId);
     
-    @Transactional(readOnly = true)
-    public List<InventoryBatch> findByProductId(UUID productId) {
-        return inventoryBatchRepository.findByProductId(productId);
-    }
+    List<InventoryBatch> findExpiringSoon(LocalDate thresholdDate);
     
-    @Transactional(readOnly = true)
-    public List<InventoryBatch> findAvailableBatchesByProductOrderByExpiry(UUID productId) {
-        return inventoryBatchRepository.findAvailableBatchesByProductOrderByExpiry(productId);
-    }
+    List<InventoryBatch> findExpired(LocalDate asOfDate);
     
-    @Transactional(readOnly = true)
-    public List<InventoryBatch> findExpiringSoon(LocalDate thresholdDate) {
-        return inventoryBatchRepository.findExpiringSoon(thresholdDate);
-    }
+    List<InventoryBatch> findAll();
     
-    @Transactional(readOnly = true)
-    public List<InventoryBatch> findExpired(LocalDate asOfDate) {
-        return inventoryBatchRepository.findExpired(asOfDate);
-    }
+    List<InventoryBatch> search(String term);
     
-    @Transactional(readOnly = true)
-    public List<InventoryBatch> search(String term) {
-        return inventoryBatchRepository.searchByBatchNumberOrProductName(term);
-    }
+    List<InventoryBatch> filterInventoryBatches(InventoryFilterCriteria criteria);
     
-    public InventoryBatch receiveAdditionalQuantity(UUID id, int quantity) {
-        InventoryBatch batch = inventoryBatchRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Inventory batch not found: " + id));
-        batch.receiveAdditionalQuantity(quantity);
-        return inventoryBatchRepository.save(batch);
-    }
+    InventoryBatch receiveAdditionalQuantity(UUID id, int quantity);
     
-    public InventoryBatch deductQuantity(UUID id, int quantity) {
-        InventoryBatch batch = inventoryBatchRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Inventory batch not found: " + id));
-        batch.deductQuantity(quantity);
-        return inventoryBatchRepository.save(batch);
-    }
+    InventoryBatch deductQuantity(UUID id, int quantity);
+    
+    InventoryBatch updateBatch(UUID id, InventoryBatch updatedBatch);
+    
+    void deactivateBatch(UUID id);
+    
+    void activateBatch(UUID id);
 }
-
-

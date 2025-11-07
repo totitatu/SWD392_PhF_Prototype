@@ -45,3 +45,9 @@ logging:
   level:
     com.zaxxer.hikari: INFO
     org.hibernate.SQL: OFF
+
+gemini:
+  api:
+    key: AIzaSyCzl2XuDH2CfUlqK11kbHBL9MELvakZXPU
+  enabled: true
+  model: gemini-pro
