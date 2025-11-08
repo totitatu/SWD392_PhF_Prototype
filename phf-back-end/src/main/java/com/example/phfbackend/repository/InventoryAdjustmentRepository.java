@@ -27,3 +27,5 @@ public interface InventoryAdjustmentRepository extends JpaRepository<InventoryAd
 
 
 
+
+

@@ -1,7 +1,7 @@
 # Maven
 target/
 !.mvn/wrapper/maven-wrapper.jar
-.mvn/
+.mvn/wrapper/maven-wrapper.properties
 
 # IDE
 .idea/
@@ -18,21 +18,16 @@ Thumbs.db
 .git/
 .gitignore
 
-# Docker
-Dockerfile
-.dockerignore
-compose.yaml
+# Logs
+*.log
 
 # Documentation
 *.md
-HELP.md
-
-# Logs
-*.log
+!README.md
 
 # Test files
 src/test/
 
-
-
-
+# Build artifacts
+*.jar
+!target/*.jar

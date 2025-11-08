@@ -7,16 +7,19 @@ spring:
       enabled: false
 
   datasource:
-    url: jdbc:postgresql://db.yekpjpfhkjaydufdzxgo.supabase.co:5432/postgres?sslmode=require&ApplicationName=phf-back-end
-    username: pharama         # hoặc tài khoản bạn tạo trong Supabase
-    password: 123    # thay bằng mật khẩu thật
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db.yekpjpfhkjaydufdzxgo.supabase.co:5432/postgres?sslmode=prefer&ApplicationName=phf-back-end&connectTimeout=30&socketTimeout=30}
+    username: ${SPRING_DATASOURCE_USERNAME:pharama}
+    password: ${SPRING_DATASOURCE_PASSWORD:123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
       minimum-idle: 1
-      connection-timeout: 15000
+      connection-timeout: 30000
       idle-timeout: 60000
       max-lifetime: 300000
+      initialization-fail-timeout: 60000
+      connection-test-query: SELECT 1
+      leak-detection-threshold: 60000
 
   jpa:
     open-in-view: false
@@ -40,6 +43,8 @@ spring:
     locations: classpath:db/migration
     create-schemas: true
     validate-on-migrate: false
+    connect-retries: 10
+    connect-retries-interval: 5
 
 logging:
   level:

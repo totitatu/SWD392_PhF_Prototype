@@ -3,17 +3,11 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 
 # Build output
 build/
 dist/
 .vite/
-
-# Environment
-.env
-.env.local
-.env.*.local
 
 # IDE
 .idea/
@@ -30,22 +24,22 @@ Thumbs.db
 .git/
 .gitignore
 
-# Docker
-Dockerfile
-.dockerignore
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
 
 # Documentation
 *.md
-README.md
+!README.md
 
-# Test
+# Test files
 coverage/
 .nyc_output/
 
 # Misc
-.eslintcache
-*.log
-
-
-
-
+.cache/
+.temp/
