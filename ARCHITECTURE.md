@@ -2,15 +2,15 @@
 
 ## 📋 Mục lục
 
-- [Tổng quan](#tổng-quan)
-- [Kiến trúc Client-Server](#kiến-trúc-client-server)
-- [Các thành phần chính](#các-thành-phần-chính)
-- [Luồng giao tiếp](#luồng-giao-tiếp)
-- [Kiến trúc Backend](#kiến-trúc-backend)
-- [Kiến trúc Frontend](#kiến-trúc-frontend)
-- [Database Schema](#database-schema)
-- [Bảo mật](#bảo-mật)
-- [Deployment](#deployment)
+- [Tổng quan](#-tổng-quan)
+- [Kiến trúc Client-Server](#-kiến-trúc-client-server)
+- [Các thành phần chính](#-các-thành-phần-chính)
+- [Luồng giao tiếp](#-luồng-giao-tiếp)
+- [Kiến trúc Backend](#-kiến-trúc-backend)
+- [Kiến trúc Frontend](#-kiến-trúc-frontend)
+- [Database Schema](#-database-schema)
+- [Bảo mật](#-bảo-mật)
+- [Deployment](#-deployment)
 
 ---
 
