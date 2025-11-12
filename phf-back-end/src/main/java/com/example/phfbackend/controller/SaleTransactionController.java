@@ -106,10 +106,27 @@ public class SaleTransactionController {
                 .customerEmail(request.getCustomerEmail())
                 .build();
         
+        java.time.LocalDate currentDate = java.time.LocalDate.now();
+        
         for (SaleTransactionLineRequest lineRequest : request.getLineItems()) {
             // Use findByIdWithProduct to eager load Product entity
             var batch = inventoryBatchRepository.findByIdWithProduct(lineRequest.getInventoryBatchId())
                     .orElseThrow(() -> new IllegalArgumentException("Inventory batch not found: " + lineRequest.getInventoryBatchId()));
+            
+            // Validate batch is not expired
+            if (batch.isExpired(currentDate)) {
+                throw new IllegalArgumentException("Cannot sell expired inventory batch: " + batch.getBatchNumber() + " (expired: " + batch.getExpiryDate() + ")");
+            }
+            
+            // Validate batch is active
+            if (!batch.isActive()) {
+                throw new IllegalArgumentException("Cannot sell inactive inventory batch: " + batch.getBatchNumber());
+            }
+            
+            // Validate sufficient quantity
+            if (batch.getQuantityOnHand() < lineRequest.getQuantity()) {
+                throw new IllegalArgumentException("Insufficient stock for batch " + batch.getBatchNumber() + ". Available: " + batch.getQuantityOnHand() + ", Requested: " + lineRequest.getQuantity());
+            }
             
             SaleTransactionLine line = SaleTransactionLine.newBuilder()
                     .product(batch.getProduct())

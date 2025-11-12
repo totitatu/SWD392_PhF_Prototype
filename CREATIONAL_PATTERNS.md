@@ -952,3 +952,9 @@ public ResponseEntity<byte[]> exportReport(
 
 **Tài liệu này mô tả các Creational Design Patterns có thể áp dụng vào dự án PharmaFlow. Ưu tiên triển khai Factory Pattern trước vì nó sẽ cải thiện code quality đáng kể.**
 
+
+
+
+
+
+

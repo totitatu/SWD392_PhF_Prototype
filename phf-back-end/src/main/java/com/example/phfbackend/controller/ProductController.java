@@ -1,13 +1,10 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.request.GeminiRequest;
-import com.example.phfbackend.dto.GeminiResponse;
 import com.example.phfbackend.dto.ProductFilterCriteria;
 import com.example.phfbackend.dto.request.ProductRequest;
 import com.example.phfbackend.dto.response.ProductResponse;
 import com.example.phfbackend.entities.product.Product;
 import com.example.phfbackend.repository.ProductRepository;
-import com.example.phfbackend.service.GeminiService;
 import com.example.phfbackend.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +22,6 @@ import java.util.stream.Collectors;
 public class ProductController {
     
     private final ProductService productService;
-    private final GeminiService geminiService;
     private final ProductRepository productRepository;
     
     @GetMapping
@@ -128,43 +124,6 @@ public class ProductController {
     public ResponseEntity<Void> activateProduct(@PathVariable UUID id) {
         productService.activateProduct(id);
         return ResponseEntity.noContent().build();
-    }
-    
-    /**
-     * UC25 - Chỉnh sửa sản phẩm với Gemini
-     * Chủ nhà thuốc chỉnh sửa thông tin sản phẩm hiện có với sự hỗ trợ của Gemini
-     */
-    @PostMapping("/{id}/edit-with-gemini")
-    public ResponseEntity<GeminiResponse> editProductWithGemini(
-            @PathVariable UUID id,
-            @Valid @RequestBody GeminiRequest request) {
-        try {
-            // Get product info for context
-            Product product = productService.findById(id)
-                    .orElseThrow(() -> new IllegalArgumentException("Product not found: " + id));
-            
-            String context = String.format(
-                "Sản phẩm hiện tại: Tên: %s, SKU: %s, Hoạt chất: %s, Dạng bào chế: %s, Độ mạnh: %s",
-                product.getName(), product.getSku(), product.getActiveIngredient(),
-                product.getDosageForm(), product.getDosageStrength()
-            );
-            
-            String fullInput = context + ". " + request.getUserInput();
-            String suggestion = geminiService.suggestProductEdit(id, fullInput);
-            
-            GeminiResponse response = GeminiResponse.builder()
-                    .suggestion(suggestion)
-                    .success(true)
-                    .build();
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            GeminiResponse errorResponse = GeminiResponse.builder()
-                    .success(false)
-                    .errorMessage(e.getMessage())
-                    .build();
-            return ResponseEntity.status(500).body(errorResponse);
-        }
     }
     
     private ProductResponse toResponse(Product product) {

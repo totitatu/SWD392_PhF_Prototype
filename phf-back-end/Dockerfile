@@ -1,76 +1,91 @@
-# Multi-stage build for Spring Boot application - Optimized
-# Stage 1: Build stage
+# =========================
+# Stage 1: Build (Maven)
+# =========================
 FROM maven:3.9-eclipse-temurin-17-alpine AS builder
+
+# SSL + DNS tools for reliable dependency download
+RUN apk add --no-cache \
+    ca-certificates \
+    openssl \
+    bind-tools \
+    busybox-extras \
+    musl-utils \
+ && update-ca-certificates \
+ && printf "hosts: files dns\n" > /etc/nsswitch.conf
 
 WORKDIR /app
 
-# Copy pom.xml first for better layer caching
+# Copy pom for better caching
 COPY pom.xml ./
 
-# Copy Maven wrapper files if they exist (optional, Maven image already has Maven)
-# COPY mvnw mvnw.cmd ./
-# COPY .mvn ./.mvn
+# Prime dependencies (tăng độ bền mạng, không fail build nếu mirror hơi chậm)
+RUN mvn -B -q dependency:go-offline \
+    -Dmaven.wagon.http.retryHandler.count=3 \
+    -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
+ || echo "Warning: Some dependencies may not be cached"
 
-# Download dependencies (this layer will be cached if pom.xml doesn't change)
-RUN mvn dependency:go-offline -B || true
-
-# Copy source code
+# Copy source
 COPY src ./src
 
-# Build the application with optimizations
-# - Skip tests for faster builds
-# - Create reproducible builds
-# - Optimize for production
-RUN mvn clean package -DskipTests -B \
+# Build app (skip tests để nhanh)
+RUN mvn -B -q clean package -DskipTests \
     -Dmaven.test.skip=true \
     -Dmaven.compile.fork=true \
-    && rm -rf /root/.m2
+    -Dmaven.wagon.http.retryHandler.count=3 \
+    -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
+ && rm -rf /root/.m2
 
-# Stage 2: Runtime stage - Using JRE slim for smaller image
+# =========================
+# Stage 2: Runtime (JRE)
+# =========================
 FROM eclipse-temurin:17-jre-alpine
 
-# Install necessary packages including network tools for debugging
+# Cài công cụ mạng + CA + nsswitch cho DNS chuẩn
 RUN apk add --no-cache \
-    wget \
-    tzdata \
+    ca-certificates \
     bind-tools \
     netcat-openbsd \
     iputils \
-    && rm -rf /var/cache/apk/*
+    busybox-extras \
+    musl-utils \
+    curl \
+    wget \
+    openssl \
+    tzdata \
+ && update-ca-certificates \
+ && printf "hosts: files dns\n" > /etc/nsswitch.conf \
+ && printf "precedence ::ffff:0:0/96  100\n" > /etc/gai.conf \
+ && rm -rf /var/cache/apk/*
 
-# Create non-root user for security
+# Clear proxy trong image để tránh JVM pick up
+ENV HTTP_PROXY="" \
+    HTTPS_PROXY="" \
+    ALL_PROXY="" \
+    NO_PROXY=".supabase.co,localhost,127.0.0.1" \
+    TZ=UTC \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# Non-root user
 RUN addgroup -S spring && adduser -S spring -G spring
-
 WORKDIR /app
 
-# Copy the JAR from builder stage
+# Copy app and startup script
 COPY --from=builder /app/target/*.jar app.jar
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
-# Change ownership to non-root user
-RUN chown spring:spring app.jar
+# Ownership
+RUN chown spring:spring app.jar /start.sh
 
-# Switch to non-root user
 USER spring:spring
-
-# Expose port
 EXPOSE 8080
 
-# Health check (increased start-period to allow database connection)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=120s --retries=5 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health 2>/dev/null || \
-      wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+# Healthcheck (dùng wget, đã cài)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+  CMD wget --no-verbose --tries=3 --timeout=5 --spider http://localhost:8080/actuator/health 2>/dev/null \
+   || wget --no-verbose --tries=3 --timeout=5 --spider http://localhost:8080/ 2>/dev/null \
+   || exit 1
 
-# Run the application with optimized JVM settings
-ENTRYPOINT ["java", \
-  "-XX:+UseContainerSupport", \
-  "-XX:MaxRAMPercentage=75.0", \
-  "-XX:+UseG1GC", \
-  "-XX:MaxGCPauseMillis=200", \
-  "-XX:+ExitOnOutOfMemoryError", \
-  "-XX:+HeapDumpOnOutOfMemoryError", \
-  "-XX:HeapDumpPath=/tmp/heapdump.hprof", \
-  "-Djava.security.egd=file:/dev/./urandom", \
-  "-Dspring.backgroundpreinitializer.ignore=true", \
-  "-Dfile.encoding=UTF-8", \
-  "-jar", \
-  "app.jar"]
+# Use startup script to resolve IP and start Java
+ENTRYPOINT ["/start.sh"]

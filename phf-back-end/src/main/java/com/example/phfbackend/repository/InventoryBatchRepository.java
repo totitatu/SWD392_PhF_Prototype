@@ -16,8 +16,8 @@ public interface InventoryBatchRepository extends JpaRepository<InventoryBatch, 
     @Query("SELECT b FROM InventoryBatch b JOIN FETCH b.product WHERE b.product.id = :productId")
     List<InventoryBatch> findByProductId(@Param("productId") UUID productId);
     
-    @Query("SELECT b FROM InventoryBatch b JOIN FETCH b.product WHERE b.product.id = :productId AND b.quantityOnHand > 0 ORDER BY b.expiryDate ASC")
-    List<InventoryBatch> findAvailableBatchesByProductOrderByExpiry(@Param("productId") UUID productId);
+    @Query("SELECT b FROM InventoryBatch b JOIN FETCH b.product WHERE b.product.id = :productId AND b.quantityOnHand > 0 AND b.active = true AND b.expiryDate >= :currentDate ORDER BY b.expiryDate ASC")
+    List<InventoryBatch> findAvailableBatchesByProductOrderByExpiry(@Param("productId") UUID productId, @Param("currentDate") LocalDate currentDate);
     
     @Query("SELECT b FROM InventoryBatch b JOIN FETCH b.product WHERE b.expiryDate <= :thresholdDate AND b.quantityOnHand > 0")
     List<InventoryBatch> findExpiringSoon(@Param("thresholdDate") LocalDate thresholdDate);

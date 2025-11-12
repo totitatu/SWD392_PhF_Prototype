@@ -51,19 +51,16 @@ export function Dashboard({ session }) {
         sum + ((item.quantity || 0) * (item.costPrice || 0)), 0
       );
 
-      // Calculate low stock and expiring items
-      const lowStockCount = inventory.filter(item => {
-        // This would need product info to check minStock
-        // For now, using a simple threshold
-        return item.quantity <= 10;
-      }).length;
+      // Get alerts using product configuration
+      let alertsData = [];
+      try {
+        alertsData = await inventoryAPI.getAlerts();
+      } catch (error) {
+        console.error('Error fetching alerts:', error);
+      }
 
-      const expiringCount = inventory.filter(item => {
-        if (!item.expiryDate) return false;
-        const expiryDate = new Date(item.expiryDate);
-        const daysUntilExpiry = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
-        return daysUntilExpiry <= 90 && daysUntilExpiry > 0;
-      }).length;
+      const lowStockCount = alertsData.filter(alert => alert.type === 'low-stock').length;
+      const expiringCount = alertsData.filter(alert => alert.type === 'expiry').length;
 
       setStats({
         todaySales: todayRevenue,
@@ -73,29 +70,8 @@ export function Dashboard({ session }) {
         totalInventoryValue: totalValue,
       });
 
-      // Generate alerts from inventory
-      const alerts = [];
-      inventory.forEach(item => {
-        if (item.quantity <= 10) {
-          alerts.push({
-            type: 'low-stock',
-            severity: item.quantity === 0 ? 'critical' : 'warning',
-            message: `Low stock: ${item.productName || 'Product'} - ${item.quantity} remaining`,
-          });
-        }
-        if (item.expiryDate) {
-          const expiryDate = new Date(item.expiryDate);
-          const daysUntilExpiry = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
-          if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
-            alerts.push({
-              type: 'expiry',
-              severity: daysUntilExpiry <= 7 ? 'critical' : 'warning',
-              message: `Expiring soon: ${item.productName || 'Product'} - ${daysUntilExpiry} days left`,
-            });
-          }
-        }
-      });
-      setAlerts(alerts);
+      // Use alerts from API (uses product configuration)
+      setAlerts(alertsData || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {

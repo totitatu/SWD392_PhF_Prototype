@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -95,26 +96,34 @@ public class POSController {
     
     /**
      * Convert Product to POSProductResponse with inventory information
+     * Excludes expired batches from stock calculation (FEFO - First Expired First Out)
      */
     private POSProductResponse toPOSResponse(Product product) {
         UUID productId = product.getId();
+        LocalDate currentDate = LocalDate.now();
         
         // Get all active inventory batches for this product
         List<InventoryBatch> batches = inventoryBatchService.findByProductId(productId);
-        List<InventoryBatch> activeBatches = batches.stream()
+        List<InventoryBatch> availableBatches = batches.stream()
                 .filter(InventoryBatch::isActive)
                 .filter(b -> b.getQuantityOnHand() > 0)
+                .filter(b -> !b.isExpired(currentDate)) // Exclude expired batches
                 .collect(Collectors.toList());
         
-        // Calculate total stock quantity
-        int stockQuantity = activeBatches.stream()
+        // Calculate total stock quantity (excluding expired batches)
+        int stockQuantity = availableBatches.stream()
                 .mapToInt(InventoryBatch::getQuantityOnHand)
                 .sum();
         
         // Get selling price (use the first available batch's price, or 0 if no stock)
-        BigDecimal sellingPrice = activeBatches.isEmpty() 
+        // Sort by expiry date to get the batch with earliest expiry (FEFO)
+        BigDecimal sellingPrice = availableBatches.isEmpty() 
                 ? BigDecimal.ZERO 
-                : activeBatches.get(0).getSellingPrice();
+                : availableBatches.stream()
+                    .sorted((a, b) -> a.getExpiryDate().compareTo(b.getExpiryDate()))
+                    .findFirst()
+                    .map(InventoryBatch::getSellingPrice)
+                    .orElse(BigDecimal.ZERO);
         
         return POSProductResponse.builder()
                 .id(product.getId())

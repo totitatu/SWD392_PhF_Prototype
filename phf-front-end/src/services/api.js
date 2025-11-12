@@ -141,6 +141,19 @@ export const inventoryAPI = {
     apiCall(`/inventory/from-purchase-order/${purchaseOrderId}`, { method: 'POST' }),
   update: (id, data) => apiCall(`/inventory/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deactivate: (id) => apiCall(`/inventory/${id}/deactivate`, { method: 'PUT' }),
+  // Alert APIs (UC41-UC42) - Uses product configuration
+  getAlerts: () => apiCall('/inventory/alerts'),
+  getLowStockAlerts: (productId, threshold) => {
+    const params = new URLSearchParams();
+    if (productId) params.append('productId', productId);
+    if (threshold !== undefined) params.append('threshold', threshold);
+    return apiCall(`/inventory/alerts/low-stock?${params.toString()}`);
+  },
+  getNearExpiryAlerts: (days) => {
+    const params = new URLSearchParams();
+    if (days !== undefined) params.append('days', days);
+    return apiCall(`/inventory/alerts/near-expiry?${params.toString()}`);
+  },
 };
 
 // POS APIs (UC43-UC45)

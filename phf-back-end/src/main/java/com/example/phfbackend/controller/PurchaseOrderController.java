@@ -1,7 +1,5 @@
 package com.example.phfbackend.controller;
 
-import com.example.phfbackend.dto.request.GeminiRequest;
-import com.example.phfbackend.dto.GeminiResponse;
 import com.example.phfbackend.dto.PurchaseOrderFilterCriteria;
 import com.example.phfbackend.dto.request.PurchaseOrderLineRequest;
 import com.example.phfbackend.dto.response.PurchaseOrderLineResponse;
@@ -10,9 +8,9 @@ import com.example.phfbackend.dto.response.PurchaseOrderResponse;
 import com.example.phfbackend.entities.purchase.PurchaseOrder;
 import com.example.phfbackend.entities.purchase.PurchaseOrderLine;
 import com.example.phfbackend.entities.purchase.PurchaseOrderStatus;
+import com.example.phfbackend.pattern.facade.PurchaseOrderFacade;
 import com.example.phfbackend.repository.ProductRepository;
 import com.example.phfbackend.repository.SupplierRepository;
-import com.example.phfbackend.service.GeminiService;
 import com.example.phfbackend.service.PurchaseOrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,9 +30,9 @@ import java.util.stream.Collectors;
 public class PurchaseOrderController {
     
     private final PurchaseOrderService purchaseOrderService;
+    private final PurchaseOrderFacade purchaseOrderFacade;
     private final SupplierRepository supplierRepository;
     private final ProductRepository productRepository;
-    private final GeminiService geminiService;
     
     @GetMapping
     @Transactional(readOnly = true)
@@ -85,58 +83,107 @@ public class PurchaseOrderController {
     }
     
     @PostMapping
-    public ResponseEntity<PurchaseOrderResponse> createPurchaseOrder(@Valid @RequestBody PurchaseOrderRequest request) {
-        var supplier = supplierRepository.findById(request.getSupplierId())
-                .orElseThrow(() -> new IllegalArgumentException("Supplier not found: " + request.getSupplierId()));
+    public ResponseEntity<PurchaseOrderResponse> createPurchaseOrder(
+            @Valid @RequestBody PurchaseOrderRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         
-        PurchaseOrder order = PurchaseOrder.newBuilder()
-                .orderCode(request.getOrderCode())
-                .supplier(supplier)
-                .status(PurchaseOrderStatus.DRAFT)
-                .orderDate(request.getOrderDate())
-                .expectedDate(request.getExpectedDate())
-                .build();
+        // Sử dụng Facade Pattern để đơn giản hóa việc tạo purchase order
+        // Facade sẽ xử lý: validation, tạo order, logging
+        PurchaseOrderResponse response = purchaseOrderFacade
+                .createPurchaseOrderWithValidation(request, userId);
         
-        for (PurchaseOrderLineRequest lineRequest : request.getLineItems()) {
-            var product = productRepository.findById(lineRequest.getProductId())
-                    .orElseThrow(() -> new IllegalArgumentException("Product not found: " + lineRequest.getProductId()));
-            
-            PurchaseOrderLine line = PurchaseOrderLine.newBuilder()
-                    .product(product)
-                    .quantity(lineRequest.getQuantity())
-                    .unitCost(lineRequest.getUnitCost())
-                    .build();
-            
-            order.addLine(line);
-        }
-        
-        PurchaseOrder created = purchaseOrderService.createPurchaseOrder(order);
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     
     @PutMapping("/{id}/status")
     @Transactional
-    public ResponseEntity<PurchaseOrderResponse> updateOrderStatus(
+    public ResponseEntity<?> updateOrderStatus(
             @PathVariable UUID id,
             @RequestParam String status) {
         try {
-            PurchaseOrderStatus statusEnum = PurchaseOrderStatus.valueOf(status.toUpperCase());
+            // Kiểm tra order hiện tại trước khi thay đổi status
+            PurchaseOrder currentOrder = purchaseOrderService.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Purchase order not found: " + id));
+            
+            // Không cho phép thay đổi status từ RECEIVED hoặc CANCELLED
+            if (currentOrder.getStatus() == PurchaseOrderStatus.RECEIVED || 
+                currentOrder.getStatus() == PurchaseOrderStatus.CANCELLED) {
+                return ResponseEntity.badRequest()
+                    .body(java.util.Map.of(
+                        "error", "Cannot change status from " + currentOrder.getStatus(),
+                        "message", "Order is already in final state and cannot be modified"
+                    ));
+            }
+            
+            // Validate status parameter
+            PurchaseOrderStatus statusEnum;
+            try {
+                statusEnum = PurchaseOrderStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(java.util.Map.of(
+                        "error", "Invalid status",
+                        "message", "Status must be one of: DRAFT, ORDERED, RECEIVED, CANCELLED"
+                    ));
+            }
+            
+            // Validate transition: không cho phép chuyển sang DRAFT
+            if (statusEnum == PurchaseOrderStatus.DRAFT) {
+                return ResponseEntity.badRequest()
+                    .body(java.util.Map.of(
+                        "error", "Invalid status transition",
+                        "message", "Cannot change status to DRAFT"
+                    ));
+            }
+            
+            // Validate transition: không cho phép cancel từ RECEIVED
+            if (statusEnum == PurchaseOrderStatus.CANCELLED && 
+                currentOrder.getStatus() == PurchaseOrderStatus.RECEIVED) {
+                return ResponseEntity.badRequest()
+                    .body(java.util.Map.of(
+                        "error", "Invalid status transition",
+                        "message", "Cannot cancel a RECEIVED order. Order is already completed."
+                    ));
+            }
+            
             purchaseOrderService.updateStatus(id, statusEnum);
+            
             // Fetch the updated order with all relations loaded
             PurchaseOrder order = purchaseOrderService.findById(id)
                     .orElseThrow(() -> new IllegalArgumentException("Purchase order not found: " + id));
             return ResponseEntity.ok(toResponse(order));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest()
+                .body(java.util.Map.of(
+                    "error", "Invalid request",
+                    "message", e.getMessage()
+                ));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest()
+                .body(java.util.Map.of(
+                    "error", "Invalid state transition",
+                    "message", e.getMessage()
+                ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(java.util.Map.of(
+                    "error", "Internal server error",
+                    "message", "An unexpected error occurred: " + e.getMessage()
+                ));
         }
     }
     
     @PostMapping("/{id}/send")
     public ResponseEntity<PurchaseOrderResponse> sendPurchaseOrder(
             @PathVariable UUID id,
-            @RequestParam(required = false) LocalDate expectedDate) {
-        PurchaseOrder order = purchaseOrderService.markOrdered(id, expectedDate);
-        return ResponseEntity.ok(toResponse(order));
+            @RequestParam(required = false) LocalDate expectedDate,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
+        
+        // Sử dụng Facade Pattern để gửi purchase order với logging
+        PurchaseOrderResponse response = purchaseOrderFacade
+                .sendPurchaseOrder(id, expectedDate, userId);
+        
+        return ResponseEntity.ok(response);
     }
     
     @PutMapping("/{id}")
@@ -144,8 +191,11 @@ public class PurchaseOrderController {
         PurchaseOrder order = purchaseOrderService.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Purchase order not found: " + id));
         
-        if (order.getStatus() != PurchaseOrderStatus.DRAFT) {
-            throw new IllegalStateException("Only draft orders can be updated");
+        // State Pattern: Sử dụng state để kiểm tra có thể update không
+        com.example.phfbackend.pattern.state.PurchaseOrderState currentState = 
+            com.example.phfbackend.pattern.state.PurchaseOrderStateFactory.getState(order.getStatus());
+        if (!currentState.canUpdate()) {
+            throw new IllegalStateException("Cannot update order with status: " + order.getStatus());
         }
         
         var supplier = supplierRepository.findById(request.getSupplierId())
@@ -173,30 +223,6 @@ public class PurchaseOrderController {
     public ResponseEntity<Void> deletePurchaseOrder(@PathVariable UUID id) {
         purchaseOrderService.deletePurchaseOrder(id);
         return ResponseEntity.noContent().build();
-    }
-    
-    /**
-     * UC30 - Thêm đơn đặt hàng nháp với Gemini
-     * Chủ nhà thuốc thêm một đơn đặt hàng nháp với sự hỗ trợ của Gemini
-     */
-    @PostMapping("/create-with-gemini")
-    public ResponseEntity<GeminiResponse> createPurchaseOrderWithGemini(@Valid @RequestBody GeminiRequest request) {
-        try {
-            String suggestion = geminiService.suggestPurchaseOrder(request.getUserInput());
-            
-            GeminiResponse response = GeminiResponse.builder()
-                    .suggestion(suggestion)
-                    .success(true)
-                    .build();
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            GeminiResponse errorResponse = GeminiResponse.builder()
-                    .success(false)
-                    .errorMessage(e.getMessage())
-                    .build();
-            return ResponseEntity.status(500).body(errorResponse);
-        }
     }
     
     private PurchaseOrderResponse toResponse(PurchaseOrder order) {

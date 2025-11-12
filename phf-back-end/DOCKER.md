@@ -77,7 +77,7 @@ Script sẽ tự động:
 - Test internet, DNS, và database port từ container
 - Hiển thị logs
 
-### Option 2: Chạy thủ công với DNS fix (Khuyến nghị)
+### Option 2: Chạy thủ công với DNS fix và clear proxy (Khuyến nghị)
 
 ```bash
 docker stop phf-backend 2>/dev/null || true
@@ -87,14 +87,24 @@ docker run -d \
   --name phf-backend \
   -p 8080:8080 \
   --dns 8.8.8.8 \
-  --dns 8.8.4.4 \
-  -e SPRING_DATASOURCE_URL="jdbc:postgresql://db.yekpjpfhkjaydufdzxgo.supabase.co:5432/postgres?sslmode=prefer&ApplicationName=phf-back-end&connectTimeout=30&socketTimeout=30" \
+  --dns 1.1.1.1 \
+  --sysctl net.ipv6.conf.all.disable_ipv6=1 \
+  --sysctl net.ipv6.conf.default.disable_ipv6=1 \
+  -e SPRING_DATASOURCE_URL="jdbc:postgresql://db.yekpjpfhkjaydufdzxgo.supabase.co:5432/postgres?sslmode=require" \
   -e SPRING_DATASOURCE_USERNAME="pharama" \
   -e SPRING_DATASOURCE_PASSWORD="123" \
+  -e HTTP_PROXY="" \
+  -e HTTPS_PROXY="" \
+  -e ALL_PROXY="" \
+  -e NO_PROXY=".supabase.co,localhost,127.0.0.1" \
+  -e JAVA_TOOL_OPTIONS="" \
   phf-back-end:latest
 ```
 
-**Lưu ý:** `--dns 8.8.8.8` giúp fix DNS resolution issues trong Docker container.
+**Lưu ý:** 
+- `--dns 8.8.8.8 --dns 1.1.1.1` ép DNS public để fix DNS resolution issues
+- `--sysctl net.ipv6.conf.all.disable_ipv6=1` tắt IPv6 để buộc dùng IPv4
+- Clear proxy environment variables để tránh JVM pick up proxy settings
 
 ### Option 3: Sử dụng Default Values (từ application.yml)
 
@@ -109,37 +119,34 @@ docker run -d \
 
 ### Option 4: Using Docker Compose
 
-Create a `docker-compose.yml` file:
+Sử dụng file `docker-compose.yml` có sẵn:
 
 ```yaml
-version: '3.8'
-
 services:
-  backend:
-    build: .
-    container_name: phf-backend
-    ports:
-      - "8080:8080"
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
+  phf-back-end:
+    image: phf-back-end:latest
+    ports: ["8080:8080"]
+    dns: [8.8.8.8, 1.1.1.1]
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db.yekpjpfhkjaydufdzxgo.supabase.co:5432/postgres?sslmode=prefer&ApplicationName=phf-back-end&connectTimeout=30&socketTimeout=30
-      - SPRING_DATASOURCE_USERNAME=pharama
-      - SPRING_DATASOURCE_PASSWORD=123
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
-      interval: 30s
-      timeout: 3s
-      retries: 5
-      start_period: 120s
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://db.yekpjpfhkjaydufdzxgo.supabase.co:5432/postgres?sslmode=require"
+      SPRING_DATASOURCE_USERNAME: "pharama"
+      SPRING_DATASOURCE_PASSWORD: "123"
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: ".supabase.co,localhost,127.0.0.1"
+      JAVA_TOOL_OPTIONS: ""
 ```
 
 Then run:
 ```bash
 docker-compose up -d
 ```
+
+**Lưu ý:**
+- DNS được ép về public DNS (8.8.8.8, 1.1.1.1)
+- IPv6 được disable qua sysctls để buộc dùng IPv4
+- Proxy environment variables được clear để tránh JVM pick up
 
 ## Troubleshooting
 

@@ -1548,3 +1548,9 @@ inventorySubject.notifyLowStock(product, currentStock, minStock);
 
 **Tài liệu này mô tả các Behavioral Design Patterns có thể áp dụng vào dự án PharmaFlow. Ưu tiên triển khai Strategy và Observer Patterns trước vì chúng sẽ cải thiện flexibility và decoupling đáng kể.**
 
+
+
+
+
+
+

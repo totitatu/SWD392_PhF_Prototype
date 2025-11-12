@@ -1203,3 +1203,9 @@ public ResponseEntity<PaymentResult> processPayment(
 
 **Tài liệu này mô tả các Structural Design Patterns có thể áp dụng vào dự án PharmaFlow. Ưu tiên triển khai Adapter và Facade Patterns trước vì chúng sẽ cải thiện code quality và maintainability đáng kể.**
 
+
+
+
+
+
+

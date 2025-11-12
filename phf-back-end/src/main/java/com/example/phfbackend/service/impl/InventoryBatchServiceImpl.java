@@ -41,7 +41,8 @@ public class InventoryBatchServiceImpl implements InventoryBatchService {
     @Override
     @Transactional(readOnly = true)
     public List<InventoryBatch> findAvailableBatchesByProductOrderByExpiry(UUID productId) {
-        return inventoryBatchRepository.findAvailableBatchesByProductOrderByExpiry(productId);
+        LocalDate currentDate = LocalDate.now();
+        return inventoryBatchRepository.findAvailableBatchesByProductOrderByExpiry(productId, currentDate);
     }
     
     @Override

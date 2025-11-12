@@ -1,0 +1,17 @@
+services:
+  phf-back-end:
+    image: phf-back-end:latest
+    ports: ["8080:8080"]
+    dns: [8.8.8.8, 1.1.1.1]
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://db.yekpjpfhkjaydufdzxgo.supabase.co:5432/postgres?sslmode=require"
+      SPRING_DATASOURCE_USERNAME: "pharama"
+      SPRING_DATASOURCE_PASSWORD: "123"
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: ".supabase.co,localhost,127.0.0.1"
+      JAVA_TOOL_OPTIONS: ""

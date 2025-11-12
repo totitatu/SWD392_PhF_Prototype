@@ -53,6 +53,7 @@ export function POSSystem({ session }) {
   const [emailReceipt, setEmailReceipt] = useState(false);
   const [prescriptionImageUrl, setPrescriptionImageUrl] = useState('');
   const [prescriptionFile, setPrescriptionFile] = useState(null);
+  const [actualTotal, setActualTotal] = useState(null); // Actual total based on batch prices
 
   // Load 5 suggested products
   const loadSuggestedProducts = useCallback(async () => {
@@ -176,15 +177,52 @@ export function POSSystem({ session }) {
   };
 
   // UC46 - Open checkout dialog
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) return;
     
-    // Check if cart has prescription products
-    const hasPrescriptionProducts = cart.some(item => {
-      const product = products.find(p => p.id === item.productId);
-      // We need to check product category - for now, assume we need to check
-      return false; // Will be checked when we have product details
-    });
+    // Calculate actual total based on batch prices (FEFO)
+    try {
+      const currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0);
+      let calculatedTotal = 0;
+      
+      for (const item of cart) {
+        const inventoryBatches = await inventoryAPI.list({ 
+          productId: item.productId,
+          active: true 
+        });
+        
+        const availableBatches = (inventoryBatches || [])
+          .filter(batch => {
+            if (batch.quantityOnHand <= 0 || batch.active === false) return false;
+            if (batch.expiryDate) {
+              const expiryDate = new Date(batch.expiryDate);
+              expiryDate.setHours(0, 0, 0, 0);
+              if (expiryDate < currentDate) return false;
+            }
+            return true;
+          })
+          .sort((a, b) => {
+            const dateA = new Date(a.expiryDate || '9999-12-31');
+            const dateB = new Date(b.expiryDate || '9999-12-31');
+            return dateA - dateB;
+          });
+        
+        let remainingQuantity = item.quantity;
+        for (const batch of availableBatches) {
+          if (remainingQuantity <= 0) break;
+          const quantityFromBatch = Math.min(remainingQuantity, batch.quantityOnHand);
+          const batchPrice = parseFloat(batch.sellingPrice) || 0;
+          calculatedTotal += batchPrice * quantityFromBatch;
+          remainingQuantity -= quantityFromBatch;
+        }
+      }
+      
+      setActualTotal(calculatedTotal);
+    } catch (error) {
+      console.error('Error calculating actual total:', error);
+      setActualTotal(null); // Fallback to cart total if calculation fails
+    }
     
     setShowCheckoutDialog(true);
   };
@@ -222,6 +260,9 @@ export function POSSystem({ session }) {
 
       // Fetch inventory batches for each product in cart
       const lineItems = [];
+      const currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0); // Set to start of day for comparison
+      
       for (const item of cart) {
         // Get available inventory batches for this product (FEFO - First Expired First Out)
         const inventoryBatches = await inventoryAPI.list({ 
@@ -229,30 +270,51 @@ export function POSSystem({ session }) {
           active: true 
         });
         
-        // Filter batches with available stock and sort by expiry date (FEFO)
+        // Filter batches: exclude expired, only active batches with stock > 0, sort by expiry date (FEFO)
         const availableBatches = (inventoryBatches || [])
-          .filter(batch => batch.quantityOnHand > 0 && batch.active !== false)
+          .filter(batch => {
+            // Check if batch is active and has stock
+            if (batch.quantityOnHand <= 0 || batch.active === false) {
+              return false;
+            }
+            
+            // Exclude expired batches
+            if (batch.expiryDate) {
+              const expiryDate = new Date(batch.expiryDate);
+              expiryDate.setHours(0, 0, 0, 0);
+              if (expiryDate < currentDate) {
+                return false; // Skip expired batches
+              }
+            }
+            
+            return true;
+          })
           .sort((a, b) => {
-            const dateA = new Date(a.expiryDate);
-            const dateB = new Date(b.expiryDate);
-            return dateA - dateB; // Earliest expiry first
+            // Sort by expiry date: earliest expiry first (FEFO)
+            const dateA = new Date(a.expiryDate || '9999-12-31');
+            const dateB = new Date(b.expiryDate || '9999-12-31');
+            return dateA - dateB;
           });
         
         if (availableBatches.length === 0) {
-          throw new Error(`No available stock for ${item.productName}`);
+          throw new Error(`No available stock for ${item.productName} (may be expired or out of stock)`);
         }
 
         // Use FEFO - take from batches with earliest expiry first
+        // Each batch may have different selling price, so use batch's actual price
         let remainingQuantity = item.quantity;
         for (const batch of availableBatches) {
           if (remainingQuantity <= 0) break;
           
           const quantityFromBatch = Math.min(remainingQuantity, batch.quantityOnHand);
           
+          // Use the actual selling price from the batch, not the price from cart
+          const batchPrice = parseFloat(batch.sellingPrice) || 0;
+          
           lineItems.push({
             inventoryBatchId: batch.id,
             quantity: quantityFromBatch,
-            unitPrice: parseFloat(item.price) || 0,
+            unitPrice: batchPrice,
           });
           
           remainingQuantity -= quantityFromBatch;
@@ -283,6 +345,7 @@ export function POSSystem({ session }) {
       setShowReceipt(true);
       setShowCheckoutDialog(false);
       setCart([]);
+      setActualTotal(null); // Reset actual total
       
       // Reset checkout form
       setPaymentMethod('CASH');
@@ -617,9 +680,26 @@ export function POSSystem({ session }) {
 
             <Separator />
 
-            <div className="flex justify-between text-lg font-semibold">
-              <span>Total Amount</span>
-              <span>${calculateTotal().toFixed(2)}</span>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Estimated Total (from cart)</span>
+                <span>${calculateTotal().toFixed(2)}</span>
+              </div>
+              {actualTotal !== null && actualTotal !== calculateTotal() && (
+                <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
+                  <span>Actual Total (based on batch prices)</span>
+                  <span>${actualTotal.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-semibold">
+                <span>Total Amount</span>
+                <span>${(actualTotal !== null ? actualTotal : calculateTotal()).toFixed(2)}</span>
+              </div>
+              {actualTotal !== null && actualTotal !== calculateTotal() && (
+                <p className="text-xs text-muted-foreground">
+                  * Price may vary based on actual batches used (FEFO - First Expired First Out)
+                </p>
+              )}
             </div>
 
             <Separator />
