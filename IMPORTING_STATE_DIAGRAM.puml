@@ -1,0 +1,86 @@
+@startuml Importing (Add New Product) - State Diagram
+
+title State Diagram: Importing (Add New Product from Purchase Order)
+
+state "DRAFT" as Draft {
+  : Create Purchase Order
+  : Add Products to Order
+  : Edit Order Items
+  : Set Supplier
+  : Set Expected Date
+}
+
+state "ORDERED" as Ordered {
+  : Purchase Order Sent
+  : Wait for Delivery
+  : Track Expected Date
+}
+
+state "RECEIVED" as Received {
+  : Goods Arrived
+  : Verify Products
+  : Create Inventory Batches
+  : Set Batch Numbers
+  : Set Expiry Dates
+  : Update Stock Quantity
+  : Products Available in Inventory
+}
+
+state "CANCELLED" as Cancelled {
+  : Order Cancelled
+  : No Inventory Created
+}
+
+[*] --> Draft : Create Purchase Order
+
+Draft --> Draft : Add/Edit Items
+Draft --> Draft : Update Supplier
+Draft --> Ordered : Send Order
+Draft --> Cancelled : Cancel Order
+
+Ordered --> Ordered : Update Expected Date
+Ordered --> Received : Mark as Received\n(Goods Arrived)
+Ordered --> Cancelled : Cancel Order
+
+Received --> [*] : Import Complete\n(Products in Inventory)
+
+Cancelled --> [*] : Order Terminated
+
+note right of Draft
+  **DRAFT State:**
+  - Can add/remove products
+  - Can edit quantities
+  - Can change supplier
+  - Can set expected date
+  - Can cancel order
+end note
+
+note right of Ordered
+  **ORDERED State:**
+  - Order sent to supplier
+  - Cannot edit items
+  - Cannot delete order
+  - Can cancel (if not received)
+  - Wait for goods delivery
+end note
+
+note right of Received
+  **RECEIVED State:**
+  - Goods physically received
+  - Inventory batches created
+  - Products added to stock
+  - Cannot modify order
+  - Cannot cancel
+  - Final state
+end note
+
+note right of Cancelled
+  **CANCELLED State:**
+  - Order terminated
+  - No inventory created
+  - Cannot reactivate
+  - Final state
+end note
+
+@enduml
+
