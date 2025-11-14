@@ -958,3 +958,4 @@ void testInventoryBatchBuilderBusinessRule() {
 
 Builder Pattern là một trong những pattern được sử dụng nhiều nhất trong project, góp phần quan trọng vào việc tạo ra codebase sạch, maintainable và robust.
 
+

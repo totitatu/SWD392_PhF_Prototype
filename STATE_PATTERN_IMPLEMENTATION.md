@@ -594,3 +594,4 @@ State Pattern trong hệ thống quản lý nhà thuốc:
 
 Pattern này đảm bảo tính nhất quán và an toàn trong việc quản lý trạng thái đơn hàng, tránh các lỗi logic phức tạp khi sử dụng if-else truyền thống.
 
+

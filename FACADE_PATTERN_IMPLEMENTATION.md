@@ -878,3 +878,4 @@ public PurchaseOrderResponse receivePurchaseOrder(UUID orderId, UUID userId) {
 
 Facade Pattern giúp tạo ra một API đơn giản, dễ sử dụng cho các operations phức tạp liên quan đến Purchase Orders, đồng thời che giấu sự phức tạp của việc tương tác với nhiều subsystems.
 
+

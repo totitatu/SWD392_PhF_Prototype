@@ -1554,3 +1554,4 @@ inventorySubject.notifyLowStock(product, currentStock, minStock);
 
 
 
+

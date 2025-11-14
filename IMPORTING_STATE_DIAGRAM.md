@@ -115,3 +115,4 @@ State diagram này mô tả quy trình import/thêm sản phẩm mới vào kho 
 - `PurchaseOrderStateFactory` tạo state instances
 - Khi chuyển sang RECEIVED, hệ thống tự động gọi `createInventoryFromOrder()`
 
+
